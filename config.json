@@ -1,0 +1,36 @@
+{
+  "pi0_fitter": {
+    "minimizer": "DualAnnealingMinimizer",
+    "debug": false,
+    "truth_comparison": true,
+    "use_true_point_transform": false,
+    "return_pi0_only": false
+  },
+  "pi0_minimizers": {
+    "debug": false,
+    "dual_annealing": {
+      "annealing_temp": 10000,
+      "maxiter": 2000,
+      "use_scan_start": false,
+      "epi0_limits": [240, 2500],
+      "cos_pi0_limits": [0, 1],
+      "eg1_limits": [120, 2200],
+      "c1_limits": [0, 80],
+      "c2_limits": [0, 80]
+    }
+  },
+  "pi0_transformations": {
+    "debug": true,
+    "branches": [],
+    "show_shower_plots": false,
+    "use_fixed_endpoint": true,
+    "shower_direction_bins": 50,
+    "true_pi0_start": [-173.5, 300, 115]
+  },
+  "pi0_model": {
+    "debug": false
+  },
+  "analytic_shower_model": {
+    "normalization_splines":  "/Users/jsen/quick_minuit_check/topo_norm_interpolation_v2.pkl"
+  }
+}
