@@ -19,24 +19,25 @@ class Pi0Fitter:
         self.pi0_model = Pi0Model(config=config)
         self.truth_comparison = self.config["truth_comparison"]
         self.use_true_transform = self.config["use_true_point_transform"]
-
+        self.lower_range, self.upper_range = self.config["fit_range"]
+        self.fit_all_events = self.config["fit_all_events"]
         self.return_pi0_only = self.config["return_pi0_only"]
 
-        self.minimizer_classes = {}
-        self.minimizer_obj = self.get_minimizer(config=config)
+        self.minimizer_obj = self.get_class(selected_class=self.minimizer, base_class=Pi0MinimizerBase, config=config)
 
-    def get_minimizer(self, config):
+    @staticmethod
+    def get_class(selected_class, base_class, config):
         """
-        Find requested minimizer and return configured object.
+        Find requested class and return configured object.
         :return:
         """
-        minimizer_classes = {cls.__name__: cls for cls in Pi0MinimizerBase.__subclasses__()}
+        available_classes = {cls.__name__: cls for cls in base_class.__subclasses__()}
 
-        if self.minimizer not in minimizer_classes.keys():
-            print("Unknown Minimizer", self.minimizer, "must be one of", list(minimizer_classes.keys()))
+        if selected_class not in available_classes.keys():
+            print("Unknown Class", selected_class, "must be one of", list(available_classes.keys()))
             raise KeyError
 
-        return minimizer_classes[self.minimizer](config)
+        return available_classes[selected_class](config)
 
     def fit_pi0(self, all_event_record):
 
@@ -46,8 +47,9 @@ class Pi0Fitter:
         # Convert 3D hits to spherical coordinates
         self.pi0_transform.transform_point_to_spherical(event_record=all_event_record)
 
-        #for evt, event_record in enumerate(all_event_record):
-        for evt in range(5, 10):
+        if self.fit_all_events: self.upper_range = len(all_event_record)
+
+        for evt in range(self.lower_range, self.upper_range):
 
             event_record = all_event_record[evt]
 

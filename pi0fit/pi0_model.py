@@ -92,19 +92,19 @@ class Pi0Model:
         shower_lh1 = np.ones_like(r1)
         shower_lh2 = np.ones_like(r2)
 
-        shower_lh1[tmask1] = self.shower_model.longitudinal_radial_profile(r=r1[tmask1], t=t1[tmask1], e0=eg1) * prob_r1
-        shower_lh2[tmask2] = self.shower_model.longitudinal_radial_profile(r=r2[tmask2], t=t2[tmask2], e0=eg2) * prob_r2
+        shower_lh1[tmask1] = self.shower_model.evaluate_shower_pdf(t=t1[tmask1], r=r1[tmask1], energy=eg1) * prob_r1
+        shower_lh2[tmask2] = self.shower_model.evaluate_shower_pdf(t=t2[tmask2], r=r2[tmask2], energy=eg2) * prob_r2
 
         e1conv_dist = -0.0033 * eg1 + 24.2
         e2conv_dist = -0.0033 * eg2 + 24.2
 
-        exten_point1 = prob_r1 * self.shower_model.longitudinal_radial_profile(r=0.1, t=tshift, e0=eg1)
-        exten_point2 = prob_r2 * self.shower_model.longitudinal_radial_profile(r=0.1, t=tshift, e0=eg2)
+        exten_point1 = prob_r1 * self.shower_model.evaluate_shower_pdf(t=tshift, r=0.1, energy=eg1)
+        exten_point2 = prob_r2 * self.shower_model.evaluate_shower_pdf(t=tshift, r=0.1, energy=eg2)
 
         exp1 = np.exp(1.8 * (t1[~tmask1] * self.rad_len_divisor) / e1conv_dist) / (e1conv_dist / 1.8)
         exp2 = np.exp(1.8 * (t2[~tmask2] * self.rad_len_divisor) / e2conv_dist) / (e2conv_dist / 1.8)
-        shower_lh1[~tmask1] = exten_point1 * exp1 * self.shower_model.longitudinal_radial_profile(r=r1[~tmask1], t=tshift, e0=eg1)
-        shower_lh2[~tmask2] = exten_point2 * exp2 * self.shower_model.longitudinal_radial_profile(r=r2[~tmask2], t=tshift, e0=eg2)
+        shower_lh1[~tmask1] = exten_point1 * exp1 * self.shower_model.evaluate_shower_pdf(t=tshift, r=r1[~tmask1], energy=eg1)
+        shower_lh2[~tmask2] = exten_point2 * exp2 * self.shower_model.evaluate_shower_pdf(t=tshift, r=r2[~tmask2], energy=eg2)
 
         res = (np.nan_to_num(shower_lh1, nan=1.e-100, posinf=1.e10, neginf=1.e-100) +
                np.nan_to_num(shower_lh2, nan=1.e-100,posinf=1.e10,neginf=1.e-100)) * open_angle_lh  # convert nan -> 0.0

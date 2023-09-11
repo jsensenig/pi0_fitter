@@ -1,9 +1,29 @@
 import numpy as np
 import math
 import pickle
+from scipy import stats
 
 
-class AnalyticShowerModel:
+class ShowerModelBase:
+
+    def __int__(self, config):
+        pass
+
+    def evaluate_shower_pdf(self, t, r, energy):
+        """
+        Interface function to access the shower model. Receives
+        points in t in radiation length and r in Moliere units.
+        Returns the probability of a hit at points (t,r) for a
+        given energy.
+        :param t: array[N]
+        :param r: array[N]
+        :param energy: float
+        :return: array[N]
+        """
+        pass
+    
+
+class AnalyticShowerModel(ShowerModelBase):
 
     """
         Electromagnetic shower model taken from paper:
@@ -13,7 +33,7 @@ class AnalyticShowerModel:
     """
 
     def __init__(self, config):
-
+        super().__init__(config=config)
         self.config = config["analytic_shower_model"]
         self.Z = 18
 
@@ -27,12 +47,12 @@ class AnalyticShowerModel:
         with open(topo_norm_file, 'rb') as f:
             self.topo_normalization = pickle.load(f)
 
-    def longitudinal_radial_profile(self, r, t, e0):
-        tmp_radial = self.radial_profile(r, t, e0)
-        tmp_long = self.longitudinal_profile(t, e0)
+    def evaluate_shower_pdf(self, t, r, energy):
+        tmp_radial = self.radial_profile(r, t, energy)
+        tmp_long = self.longitudinal_profile(t, energy)
 
         # should be 1/sqrt(r)
-        return (tmp_long * tmp_radial * (1. / np.sqrt(r))) / self.topo_normalization(e0)
+        return (tmp_long * tmp_radial * (1. / np.sqrt(r))) / self.topo_normalization(energy)
 
     def radial_profile(self, r, t, e0):
         tau = t / self.tmax(e0)
@@ -80,3 +100,57 @@ class AnalyticShowerModel:
         """
         # return np.log(e0/E_c) - 0.858 #LAr
         return np.log(e0 / self.e_critical) - 0.329  # divergence at 50MeV
+
+
+class BinnedShowerModel(ShowerModelBase):
+
+    def __int__(self, config):
+        super().__int__(config=config)
+        self.config = config["binned_shower_model"]
+        self.analytic_model = AnalyticShowerModel(config=config)
+        self.hit_selection_threshold = self.config["hit_selection_threshold"] # 0.1
+        self.kde_file = self.config["kde_file"]
+        self.charge_kde = None
+
+    def select_hits(self, t, r, energy):
+        radial = self.analytic_model.radial_profile(r=r, t=t, e0=energy)
+        return radial <= self.hit_selection_threshold
+
+    def evaluate_shower_pdf(self, t, r, energy):
+
+        # Use radial part of analytic function to select shower hits
+        mask = self.select_hits(t=t, r=t, energy=energy)
+
+        # Evaluate the correlated charge deposition pdf for each hit
+        result = self.charge_tr_pdf(pts=t[mask], energy=energy)
+
+        return result
+
+    def charge_tr_pdf(self, pts, energy):
+        # pt = [t,r,e,q]
+
+        cut_list = self.charge_kde["ranges"]
+
+        dim = 0
+        qlist = []
+        for t_lower, t_upper, r_lower, r_upper in cut_list:
+            tmask_raw = (t_lower <= pts[:, 0]) & (pts[:, 0] < t_upper)
+            rmask_raw = (r_lower <= pts[:, 1]) & (pts[:, 1] < r_upper)
+            qmask = rmask_raw & tmask_raw
+
+            charge_sum = np.sum(pts[:, 3][qmask & (pts[:, 3] > -1)])
+            qlist.append(charge_sum)
+            dim += 1
+
+        return self.charge_kde[energy].evaluate(np.asarray(qlist))
+
+    def load_kde(self):
+
+        with open(self.kde_file, 'rb') as ifile:
+            self.charge_kde = pickle.load(ifile)
+
+        if type(self.charge_kde[next(iter(self.charge_kde))]) != stats._kde.gaussian_kde:
+            raise TypeError
+
+        print("Loaded KDE file for BinnedShowerModel")
+        print("4D Ranges", self.charge_kde["ranges"])
