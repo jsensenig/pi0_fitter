@@ -23,21 +23,9 @@ class Pi0Fitter:
         self.fit_all_events = self.config["fit_all_events"]
         self.return_pi0_only = self.config["return_pi0_only"]
 
-        self.minimizer_obj = self.get_class(selected_class=self.minimizer, base_class=Pi0MinimizerBase, config=config)
-
-    @staticmethod
-    def get_class(selected_class, base_class, config):
-        """
-        Find requested class and return configured object.
-        :return:
-        """
-        available_classes = {cls.__name__: cls for cls in base_class.__subclasses__()}
-
-        if selected_class not in available_classes.keys():
-            print("Unknown Class", selected_class, "must be one of", list(available_classes.keys()))
-            raise KeyError
-
-        return available_classes[selected_class](config)
+        self.minimizer_obj = futil.get_class(selected_class=self.minimizer,
+                                             base_class=Pi0MinimizerBase,
+                                             config=config)
 
     def fit_pi0(self, all_event_record):
 
@@ -50,8 +38,11 @@ class Pi0Fitter:
         if self.fit_all_events: self.upper_range = len(all_event_record)
 
         for evt in range(self.lower_range, self.upper_range):
-
+            print("######## Event:", evt)
             event_record = all_event_record[evt]
+
+            if len(event_record["pi0_gamma_e_initial"]) > 2:
+                continue
 
             # Get 3D points for event
             pi0_points = self.get_event_points(event_record=event_record, evt=evt,
@@ -61,6 +52,11 @@ class Pi0Fitter:
             truth_values = None
             if self.truth_comparison:
                 truth_values = self.get_event_truth_values(event_record=event_record, evt=evt)
+
+            if truth_values.epi0 < 1600 or truth_values.epi0 > 2400 or truth_values.eg1 < 800 or truth_values.eg1 > 1200\
+                or (truth_values.epi0 - truth_values.eg1) < 800:
+                continue
+            print("MADE IT!!")
 
             # Minimize fit
             self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
@@ -107,6 +103,7 @@ class Pi0Fitter:
         # Conversion distance
 
         true_theta1, true_theta2 = futil.single_to_spherical(v=p1)[2], futil.single_to_spherical(v=p2)[2]
+        print("True Gamma Theta 1/2", round(np.degrees(true_theta1), 2), "/", round(np.degrees(true_theta2), 2))
 
         theta1_up, theta1_down = (true_theta1 + np.radians(5)), (true_theta1 - np.radians(5))
         theta2_up, theta2_down = (true_theta2 + np.radians(5)), (true_theta2 - np.radians(5))
@@ -120,7 +117,7 @@ class Pi0Fitter:
         if self.debug:
             print("CDist:", true_cdist1, "/", true_cdist2, file=out_file)
 
-        truth_values = FitResults(0,0,0,0,0,0,0,0,0,False)
+        truth_values = FitResults(0, 0, 0, 0, 0, 0, 0, 0, 0, False)
         truth_values.set_event_values(epi0=(e1+e2), cos_pi0=cos_pi0, eg1=e1, c1=true_cdist1, c2=true_cdist2, is_truth=True)
 
         return truth_values

@@ -48,9 +48,12 @@ class Pi0Transformations:
             print("reco_gamma_dir", reco_gamma_dir)
             print("reco_pip_dir", reco_pip_dir)
 
-        pts = np.vstack((ak.to_numpy(event_record["reco_all_SpHit_X"]) - self.xstart[evt],
-                         ak.to_numpy(event_record["reco_all_SpHit_Y"]) - self.ystart[evt],
-                         ak.to_numpy(event_record["reco_all_SpHit_Z"]) - self.zstart[evt])).T
+        pts = np.vstack((ak.to_numpy(event_record["reco_all_spacePts_X"]) - self.xstart[evt],
+                         ak.to_numpy(event_record["reco_all_spacePts_Y"]) - self.ystart[evt],
+                         ak.to_numpy(event_record["reco_all_spacePts_Z"]) - self.zstart[evt])).T
+
+        charge = ak.to_numpy(event_record["reco_all_spacePts_Integral"])
+        charge = charge.reshape(len(charge), 1)
 
         gamma_dir = reco_gamma_dir / np.linalg.norm(reco_gamma_dir, axis=0)
         pip_dir = reco_pip_dir / np.linalg.norm(reco_pip_dir, axis=0)
@@ -79,14 +82,29 @@ class Pi0Transformations:
 
         new_pts = basis_mtx @ pts.T
         spherical_pts = futil.single_to_spherical(v=new_pts)
+        spherical_pts = np.hstack((spherical_pts.T, charge))
 
-        return spherical_pts, None, None #p1_vec, p2_vec
+        try:
+            p1r, p2r = (np.vstack((ak.to_numpy(event_record["pi0_gamma_startpx_initial"]),
+                                   ak.to_numpy(event_record["pi0_gamma_startpy_initial"]),
+                                   ak.to_numpy(event_record["pi0_gamma_startpz_initial"]))).T)
+            p1 = p1r / np.linalg.norm(p1r, axis=0)
+            p2 = p2r / np.linalg.norm(p2r, axis=0)
+            p1_tran = basis_mtx @ p1.T
+            p2_tran = basis_mtx @ p2.T
+            flipped = np.argsort([futil.single_to_spherical(v=p1_tran)[1],
+                                  futil.single_to_spherical(v=p2_tran)[1]])[0] == 1
+        except:
+            print("Failed to get truth gamma direction")
+            flipped = False
+
+        return spherical_pts, None, None, flipped #p1_vec, p2_vec
 
     def transform_point_to_spherical(self, event_record):
 
-        tmp_x = event_record["reco_all_SpHit_X"]
-        tmp_y = event_record["reco_all_SpHit_Y"]
-        tmp_z = event_record["reco_all_SpHit_Z"]
+        tmp_x = event_record["reco_all_spacePts_X"]
+        tmp_y = event_record["reco_all_spacePts_Y"]
+        tmp_z = event_record["reco_all_spacePts_Z"]
 
         # Shift origin to beam interaction vertex
         # start point set at top function
@@ -116,8 +134,9 @@ class Pi0Transformations:
             c, bx, by, _ = plt.hist2d(np.degrees(theta), np.degrees(phi),
                                       bins=[self.shower_direction_bins, self.shower_direction_bins],
                                       range=[[0, 90], [-180, 180]])
-            plt.plot(np.degrees(gamma1[1]), np.degrees(gamma1[2]), marker='*', markersize=12, color='orange')
-            plt.plot(np.degrees(gamma2[1]), np.degrees(gamma2[2]), marker='*', markersize=12, color='red')
+            if gamma1 is not None and gamma2 is not None:
+                plt.plot(np.degrees(gamma1[1]), np.degrees(gamma1[2]), marker='*', markersize=12, color='orange')
+                plt.plot(np.degrees(gamma2[1]), np.degrees(gamma2[2]), marker='*', markersize=12, color='red')
             plt.xlabel("$\\theta$ [deg]")
             plt.ylabel("$\phi$ [deg]")
             plt.colorbar()
@@ -131,7 +150,13 @@ class Pi0Transformations:
         byc = (by[1:] + by[0:-1]) / 2.
         x_idx, y_idx = np.unravel_index(c.argmax(), c.shape)
 
-        return np.radians(bxc[x_idx]), np.radians(byc[y_idx])  # θ,ϕ
+        # Add an arbitrary angle to the shower. If we don't then the
+        # center of the shower is the axis and the points symmetric about
+        # this axis will have the same theta. This causes a bias when fitting the
+        # shower direction.
+        reco_theta = bxc[x_idx] + 10.
+
+        return np.radians(reco_theta), np.radians(byc[y_idx])  # θ,ϕ
 
     def truth_transform_to_pi0_plane(self, event_record, evt):
         """
@@ -140,12 +165,12 @@ class Pi0Transformations:
         """
 
         try:
-            p2r, p1r = (np.vstack((ak.to_numpy(event_record["pi0_gamma_px_initial"]),
-                                   ak.to_numpy(event_record["pi0_gamma_py_initial"]),
-                                   ak.to_numpy(event_record["pi0_gamma_pz_initial"]))).T)
-            pts = np.vstack((ak.to_numpy(event_record["reco_all_SpHit_X"]) - self.xstart[evt],
-                             ak.to_numpy(event_record["reco_all_SpHit_Y"]) - self.ystart[evt],
-                             ak.to_numpy(event_record["reco_all_SpHit_Z"]) - self.zstart[evt])).T
+            p1r, p2r = (np.vstack((ak.to_numpy(event_record["pi0_gamma_startpx_initial"]),
+                                   ak.to_numpy(event_record["pi0_gamma_startpy_initial"]),
+                                   ak.to_numpy(event_record["pi0_gamma_startpz_initial"]))).T)
+            pts = np.vstack((ak.to_numpy(event_record["reco_all_spacePts_X"]) - self.xstart[evt],
+                             ak.to_numpy(event_record["reco_all_spacePts_Y"]) - self.ystart[evt],
+                             ak.to_numpy(event_record["reco_all_spacePts_Z"]) - self.zstart[evt])).T
         except:
             print("Failed to get event, skipping")
             print("Gamma E:", event_record["pi0_gamma_e_initial"])
@@ -175,7 +200,10 @@ class Pi0Transformations:
         spherical_pts = futil.single_to_spherical(v=new_pts)
         return_pts = np.array([spherical_pts[0, :], spherical_pts[2, :], spherical_pts[1, :]])  # phi and theta swapped
 
-        return return_pts, p1_vec, p2_vec
+        flipped = np.argsort([futil.single_to_spherical(v=p1_vec)[1],
+                              futil.single_to_spherical(v=p2_vec)[1]])[0] == 1
+
+        return return_pts, p1_vec, p2_vec, flipped
 
     def set_beam_endpoint(self, all_event_record):
 

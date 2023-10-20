@@ -66,7 +66,8 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
             _, scan_params = self.brute_force_scan(shower_pts=pi0_points, conv_dist=None, out_file=out_file, full_fit=True)
             start_pt = np.array([scan_params[0], scan_params[1], scan_params[2], scan_params[3], scan_params[4]])
         else:
-            start_pt = np.array([1200, 0.9, 600, 12, 18])
+            #start_pt = np.array([1200, 0.9, 600, 12, 18])
+            start_pt = np.array([1800, 0.9, 1000, 12, 18])
 
         if self.out_file is None:
             print("Start Point:", start_pt)
@@ -76,7 +77,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         print("Starting Minimization")
         min_result = dual_annealing(self.model_interface, args=np.array([pi0_points]), bounds=bounds,
                                     maxiter=self.maxiter, x0=start_pt, initial_temp=self.anealing_temp)
-
+        print("Fmin:", min_result.fun)
         self.show_results(minimizer=min_result, truth_values=truth_values)
 
     def show_results(self, minimizer, truth_values):
@@ -99,7 +100,6 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         if self.debug:
             print("x", x)
             print("epi0, cos_pi0, eg1", epi0, cos_pi0, eg1)
-            print("shower_pts", pi0_points)
             print("shower_pts.shape", pi0_points.shape)
 
         # Energy constraint
@@ -112,6 +112,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
             res = self.pi0_model.pi0_model(pi0_points, epi0=epi0, cos_pi0=cos_pi0, eg1=eg1, c1=c1, c2=c2)
 
         log_lh = np.log(np.nan_to_num(res, nan=1.e-200) + 1.e-200)
+        #print("-np.sum(log_lh):", -np.sum(log_lh))
         return -np.sum(log_lh)
 
 

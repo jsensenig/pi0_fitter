@@ -3,6 +3,20 @@ from dataclasses import dataclass
 from prettytable import PrettyTable
 
 
+def get_class(selected_class, base_class, config):
+    """
+    Find requested class and return configured object.
+    :return:
+    """
+    available_classes = {cls.__name__: cls for cls in base_class.__subclasses__()}
+
+    if selected_class not in available_classes.keys():
+        print("Unknown Class", selected_class, "must be one of", list(available_classes.keys()))
+        raise KeyError
+
+    return available_classes[selected_class](config)
+
+
 def spherical_dot(x1, x2):
     """
     Take the dot product of 2 vectors in spherical coordinates
@@ -10,13 +24,18 @@ def spherical_dot(x1, x2):
     :param x2: array[N,3]
     :return: array[N]
     """
-    xyz1 = spherical_to_cartesian(x1)[0]
-    xyz2 = spherical_to_cartesian(x2)[0]
+    xyz1 = spherical_to_cartesian(x1)#[0]
+    xyz2 = spherical_to_cartesian(x2)#[0]
 
-    xyz1 /= np.linalg.norm(xyz1, axis=0)
-    xyz2 /= np.linalg.norm(xyz2, axis=0)
+    norm1 = np.linalg.norm(xyz1, axis=1)
+    norm1.reshape(norm1.size, 1)
+    xyz1p = (xyz1.T / norm1).T
 
-    return xyz1 @ xyz2.T
+    norm2 = np.linalg.norm(xyz2, axis=1)
+    norm2.reshape(norm2.size, 1)
+    xyz2p = (xyz2.T / norm2).T
+
+    return (xyz1p @ xyz2p.T).T[:, 0]
 
 
 def spherical_to_cartesian(points):  # X = [r,theta,phi]

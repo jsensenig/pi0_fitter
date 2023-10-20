@@ -16,7 +16,7 @@ if __name__ == '__main__':
     file_name = "/Users/jsen/tmp/tmp_pi0_shower/sample/single_pi0/single_pi0_uniform_0_2gev_n4550.root:trkUtil/points"
     #file_name = "/home/hep/work/dune/pion_cex_ana/pi0_fitting/data/single_pi0_uniform_0_2gev_n4550.root:trkUtil/points"
 
-    branches = ["reco_all_SpHit_X", "reco_all_SpHit_Y", "reco_all_SpHit_Z",
+    branches = ["reco_all_SpHit_X", "reco_all_SpHit_Y", "reco_all_SpHit_Z", "reco_all_SpHit_sadc",
                 "pi0_gamma_px_initial", "pi0_gamma_py_initial", "pi0_gamma_pz_initial", "pi0_gamma_e_initial",
                 "pi0_gamma_open_angle_initial"]
 
