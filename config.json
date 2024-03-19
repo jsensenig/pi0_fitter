@@ -4,21 +4,30 @@
     "debug": false,
     "truth_comparison": true,
     "use_true_point_transform": false,
-    "fit_range": [1,2],
+    "fit_range": [1670,1710],
     "fit_all_events": false,
-    "return_pi0_only": false
+    "return_pi0_only": false,
+    "rotate_polar_axis": true,
+    "transform_points": true
   },
   "pi0_minimizers": {
     "debug": false,
+    "fit_pi0_var": false,
     "dual_annealing": {
-      "annealing_temp": 10000,
+      "annealing_temp": 16000,
       "maxiter": 2000,
+      "restart_temp_ratio": 0.0002,
       "use_scan_start": false,
-      "epi0_limits": [1600, 2400],
+      "epi0_limits": [140, 2400],
       "cos_pi0_limits": [0, 1],
-      "eg1_limits": [800, 1200],
-      "c1_limits": [0, 80],
-      "c2_limits": [0, 80]
+      "eg1_limits": [50, 1200],
+      "eg2_limits": [50, 1200],
+      "theta1_limits": [0, 180],
+      "theta2_limits": [0, 180],
+      "phi1_limits": [-180, 180],
+      "phi2_limits": [-180, 180],
+      "c1_limits": [5, 100],
+      "c2_limits": [5, 100]
     }
   },
   "pi0_transformations": {
@@ -27,7 +36,17 @@
     "show_shower_plots": false,
     "use_fixed_endpoint": true,
     "shower_direction_bins": 50,
-    "true_pi0_start": [-174.5, 300, 115]
+    "true_pi0_start": [-172.5, 300, 115]
+  },
+  "binned_pi0_model": {
+    "debug": false,
+    "n_random_hist": 50,
+    "charge_upper_range": 500,
+    "variance_divisor": 2,
+    "sigma_e_factor": 20,
+    "epi0_charge_model_divisor": 1,
+    "charge_hist_file": "etc/mean_variance_hist_single_gamma_pdf_rotated_cdist_3d_wzero_50_1200.pkl",
+    "direction_hist_file": "etc/hist_single_gamma_direction_pdf_rotated_cdist_3d.pkl"
   },
   "pi0_model": {
     "debug": false,
@@ -38,6 +57,25 @@
   },
   "binned_shower_model": {
     "hit_selection_threshold": 0.1,
-    "kde_file": "etc/charge_pdf_3d_TR_kde_bw0_20.pkl"
+    "kde_file": "etc/charge_pdf_3d_TR_kde_bw0_20_50_1200.pkl"
+  },
+  "clean_event": {
+     "use_true_vertex": false,
+     "has_cosmics": true,
+     "beam_cos_theta_cut": 0.92,
+     "mean_beam_theta": 162,
+     "mean_beam_phi": 50,
+     "charge_point_cut": 900,
+     "rcut_low": 7,
+     "rcut_high": 150,
+     "daughter_rstart_cut": 5,
+     "proton_chi2_cut": 110,
+     "daughter_nhit_cut": 30,
+     "fiducial_xmin": -340,
+     "fiducial_xmax": -20,
+     "fiducial_ymin": 50,
+     "fiducial_ymax": 550,
+     "fiducial_zmin": 20,
+     "fiducial_zmax": 400
   }
 }

@@ -65,7 +65,7 @@ class AnalyticShowerModel(ShowerModelBase):
 
         tmp_radial = p * self.radial_rc(r, t, e0) + (1. - p) * self.radial_rt(r, t, e0)
 
-        return tmp_radial / 5.6 # normalizing function to 1
+        return tmp_radial # normalizing function to 1
 
     def test_radial_profile(self, r, t, e0, cutoff):
         #cutoff = 5.
@@ -293,7 +293,9 @@ class BinnedShowerModel(ShowerModelBase):
         q3_mpv = self.get_q3_mpv(energy=energy, pdict=self.q3_fit_params)
         qlist[-1] = q3_mpv
 
-        return self.charge_kde[e_key].evaluate(qlist) / self.energy_norm[e_key], q3_prime_prob
+        #return self.charge_kde[e_key].evaluate(qlist) / self.energy_norm[e_key], q3_prime_prob
+
+        return self.charge_kde[e_key].evaluate(qlist), q3_prime_prob
 
     def load_kde(self):
 
@@ -308,7 +310,8 @@ class BinnedShowerModel(ShowerModelBase):
 
         ###################
 
-        pdf_hist_file = "/Users/jsen/work/Protodune/analysis/pi0_fitter/etc/charge_pdf_just_calo_kde.pkl"
+        # pdf_hist_file = "/Users/jsen/work/Protodune/analysis/pi0_fitter/etc/charge_pdf_just_calo_kde.pkl"
+        pdf_hist_file = "/Users/jsen/work/Protodune/analysis/pi0_fitter/etc/charge_pdf_just_calo_kde_50_1200.pkl"
         with open(pdf_hist_file, 'rb') as ifile:
             self.charge_pdf_just_calo_kde = pickle.load(ifile)
 

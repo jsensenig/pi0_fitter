@@ -59,12 +59,24 @@ def spherical_to_cartesian(points):  # X = [r,theta,phi]
         raise TypeError
 
 
-def single_to_spherical(v):  # [x,y,z]
-    x, y, z = v
+def single_to_spherical(v, rotate_polar_axis=False):  # [x,y,z]
+    """
+    Input: (3,N) = (XYZ,N)
+    Default coordinate system sets z to be polar axis
+    setting `rotated_polar_axis=True` rotates about x
+    and sets y to be the polar axis i.e.,
+    y' = z
+    z' = -y
+    """
+    if rotate_polar_axis:
+        x, z, y = v
+        z *= -1.
+    else:
+        x, y, z = v
     # rho
-    xy = x ** 2 + y ** 2
+    xy = x*x + y*y
     # R,Theta,Phi
-    r = np.sqrt(xy + z ** 2)
+    r = np.sqrt(xy + z*z)
     theta = np.arctan2(np.sqrt(xy), z)
     phi = np.arctan2(y, x)
 
@@ -109,6 +121,8 @@ class FitResults:
     eg2: float
     theta1: float
     theta2: float
+    phi1: float
+    phi2: float
     c1: float
     c2: float
     open_angle: float
@@ -121,7 +135,7 @@ class FitResults:
 
     @staticmethod
     def class_labels():
-        return ["Eπ0", "cosθ_π0", "Eγ1", "Eγ2", "θγ1", "θγ2", "Open Angle", "C1", "C2", "istruth"]
+        return ["Eπ0", "cosθ_π0", "Eγ1", "Eγ2", "θγ1", "θγ2", "ϕ1", "ϕ2", "Open Angle", "C1", "C2", "istruth"]
 
     def set_event_values(self, epi0, cos_pi0, eg1, c1, c2, is_truth):
         self.epi0 = epi0
@@ -133,14 +147,53 @@ class FitResults:
         self.is_truth = is_truth
         self.open_angle, self.theta1, self.theta2 = pi0_angles(epi0=self.epi0, cos_pi0=self.cos_pi0, a=self.eg1/self.epi0)
 
+    def set_event_values_shower(self, eg1, eg2, theta1, theta2, phi1, phi2, c1, c2, is_truth):
+        self.eg1 = eg1
+        self.c1 = c1
+        self.c2 = c2
+        self.is_truth = is_truth
+        self.theta1 = theta1
+        self.theta2 = theta2
+        self.phi1 = phi1
+        self.phi2 = phi2
+        self.open_angle = np.arccos(spherical_dot(np.array([[1., np.radians(theta1), np.radians(phi1)]]),
+                                                  np.array([[1., np.radians(theta2), np.radians(phi2)]])))[0]
+
+        self.eg2 = eg2 #(135. * 135.) / (2. * self.eg1 * (1. - np.cos(self.open_angle))) if eg2 is None else eg2
+        self.epi0 = eg1 + eg2
+
+        ppi0 = np.sqrt(eg1 ** 2 + self.eg2 ** 2 + 2. * eg1 * self.eg2 * np.cos(self.open_angle))
+        #self.cos_pi0 = (eg1 + self.eg2 * np.cos(self.open_angle)) / ppi0
+        self.cos_pi0 = (eg1 * np.cos(np.radians(theta1)) + eg2 * np.cos(np.radians(theta2))) / ppi0
+
     def values_as_array(self):
-        return np.round(np.array([self.epi0, self.cos_pi0, self.eg1, self.eg2, np.degrees(self.theta1),
-                                  np.degrees(self.theta2), np.degrees(self.open_angle), self.c1, self.c2,
+        return np.round(np.array([self.epi0, self.cos_pi0, self.eg1, self.eg2, self.theta1, self.theta2,
+                                  self.phi1, self.phi2, np.degrees(self.open_angle), self.c1, self.c2,
                                   self.is_truth]), 2)
 
     def values_as_dict(self):
-        return {"epi0": self.epi0, "cos_pi0": self.cos_pi0, "eg1": self.eg1, "eg2": self.eg2, "theta1": self.theta1,
-                "theta2": self.theta2, "c1": self.c1, "c2": self.c2, "open_angle": self.open_angle}
+        return {"epi0": self.epi0, "cos_pi0": self.cos_pi0, "eg1": self.eg1, "eg2": self.eg2,
+                "theta1": self.theta1, "theta2": self.theta2, "phi1": self.phi1, "phi2": self.phi2,
+                "c1": self.c1, "c2": self.c2, "open_angle": np.degrees(self.open_angle)}
+
+    def comparison_as_dict(self, fit_result):
+
+        epi0_bias = self.epi0 / fit_result.epi0 - 1.
+        cos_pi0_diff = fit_result.cos_pi0 - self.cos_pi0
+        eg1_bias = self.eg1 / fit_result.eg1 - 1.
+        eg2_bias = self.eg2 / fit_result.eg2 - 1.
+
+        in_dir1 = np.array([[1., np.radians(fit_result.theta1), np.radians(fit_result.phi1)]])
+        in_dir2 = np.array([[1., np.radians(fit_result.theta2), np.radians(fit_result.phi2)]])
+
+        self_dir1 = np.array([[1., np.radians(self.theta1), np.radians(self.phi1)]])
+        self_dir2 = np.array([[1., np.radians(self.theta2), np.radians(self.phi2)]])
+
+        cos_dir1 = spherical_dot(self_dir1, in_dir1)[0]
+        cos_dir2 = spherical_dot(self_dir2, in_dir2)[0]
+
+        return {"epi0_bias": epi0_bias, "cos_pi0_diff": cos_pi0_diff, "eg1_bias": eg1_bias, "eg2_bias": eg2_bias,
+                "cos_theta1": cos_dir1, "cos_theta2": cos_dir2}
 
     def print_comparison_table(self, fit_result):
 
@@ -155,13 +208,24 @@ class FitResults:
         :param fit_result: FitResults object
         :return:
         """
-        labels = ["Eπ0: reco/true-1", "cosθ_π0: true-reco", "Eγ1: reco/true-1", "C1: true-reco", "C2: true-reco"]
+        labels = ["Eπ0: reco/true-1", "cosθ_π0: true-reco", "Eγ1: reco/true-1", "Eγ2: reco/true-1",
+                  "Dir1: cosθ", "Dir2: cosθ"]
         epi0_bias = self.epi0 / fit_result.epi0 - 1.
         cos_pi0_diff = fit_result.cos_pi0 - self.cos_pi0
         eg1_bias = self.eg1 / fit_result.eg1 - 1.
+        eg2_bias = self.eg2 / fit_result.eg2 - 1.
         c1_diff = fit_result.c1 - self.c1
         c2_diff = fit_result.c2 - self.c2
 
+        in_dir1 = np.array([[1., np.radians(fit_result.theta1), np.radians(fit_result.phi1)]])
+        in_dir2 = np.array([[1., np.radians(fit_result.theta2), np.radians(fit_result.phi2)]])
+
+        self_dir1 = np.array([[1., np.radians(self.theta1), np.radians(self.phi1)]])
+        self_dir2 = np.array([[1., np.radians(self.theta2), np.radians(self.phi2)]])
+
+        cos_dir1 = spherical_dot(self_dir1, in_dir1)[0]
+        cos_dir2 = spherical_dot(self_dir2, in_dir2)[0]
+
         t = PrettyTable(labels)
-        t.add_row(np.round(np.array([epi0_bias, cos_pi0_diff, eg1_bias, c1_diff, c2_diff]), 3))
+        t.add_row(np.round(np.array([epi0_bias, cos_pi0_diff, eg1_bias, eg2_bias, cos_dir1, cos_dir2]), 3))
         print(t)

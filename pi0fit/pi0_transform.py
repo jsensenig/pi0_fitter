@@ -100,23 +100,29 @@ class Pi0Transformations:
 
         return spherical_pts, None, None, flipped #p1_vec, p2_vec
 
-    def transform_point_to_spherical(self, event_record):
+    def transform_point_to_spherical(self, event_record, rotate_polar_axis=False):
 
-        tmp_x = event_record["reco_all_spacePts_X"]
-        tmp_y = event_record["reco_all_spacePts_Y"]
-        tmp_z = event_record["reco_all_spacePts_Z"]
+        tmp_us_x = event_record["reco_all_spacePts_X"]
+        tmp_us_y = event_record["reco_all_spacePts_Y"]
+        tmp_us_z = event_record["reco_all_spacePts_Z"]
 
         # Shift origin to beam interaction vertex
         # start point set at top function
-        tmp_x = tmp_x - self.xstart  # with SCE
-        tmp_y = tmp_y - self.ystart
-        tmp_z = tmp_z - self.zstart
+
+        if rotate_polar_axis:
+            tmp_x = tmp_us_x - self.xstart  # with SCE
+            tmp_z = -(tmp_us_y - self.ystart)
+            tmp_y = tmp_us_z - self.zstart
+        else:
+            tmp_x = tmp_us_x - self.xstart  # with SCE
+            tmp_y = tmp_us_y - self.ystart
+            tmp_z = tmp_us_z - self.zstart
 
         # rho
-        xy = tmp_x ** 2 + tmp_y ** 2
+        xy = tmp_x*tmp_x + tmp_y*tmp_y
 
         # R
-        event_record["reco_daughter_PFP_shower_spacePts_R"] = np.sqrt(xy + tmp_z**2)
+        event_record["reco_daughter_PFP_shower_spacePts_R"] = np.sqrt(xy + tmp_z*tmp_z)
         # Theta
         event_record["reco_daughter_PFP_shower_spacePts_Theta"] = np.arctan2(np.sqrt(xy), tmp_z)
         # event_record["reco_daughter_PFP_shower_spacePts_ThetaXZ"] = np.arctan2(tmp_x, tmp_z)
