@@ -23,6 +23,7 @@ class Pi0Fitter:
         self.return_pi0_only = self.config["return_pi0_only"]
         self.rotate_polar_axis = self.config["rotate_polar_axis"]
         self.transform_points = self.config["transform_points"]
+        self.use_true_vertex = self.config["use_true_vertex"]
 
         self.minimizer_obj = futil.get_class(selected_class=self.minimizer,
                                              base_class=Pi0MinimizerBase,
@@ -45,21 +46,16 @@ class Pi0Fitter:
             print("######## Event:", evt)
             event_record = all_event_record[evt]
 
-            # if len(event_record["pi0_gamma_starte_initial"]) > 2:
-            #     continue
-
             # Get 3D points for event
             if pi0_points is None:
-                pi0_points = self.get_event_points(event_record=event_record)
+                # pi0_points = self.get_event_points(event_record=event_record)
+                pi0_points = self.get_event_points(event_record=event_record, event=evt, return_spherical=True,
+                                                   cosmics=False, get_gammas=False)
 
             # Get event truth information
             truth_values = None
             if self.truth_comparison:
                 truth_values = self.get_event_truth_values(event_record=event_record)
-
-            if truth_values.eg1 < 45 or truth_values.eg1 > 1200 or truth_values.eg2 < 45 or truth_values.eg2 > 1200:
-                continue
-            print("MADE IT!!")
 
             # Minimize fit
             self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
@@ -74,26 +70,89 @@ class Pi0Fitter:
         else:
             return None, None
 
-    @staticmethod
-    def get_event_points(event_record):
+    def get_event_points(self, event_record, event, return_spherical, cosmics=False, get_gammas=True):
 
-        r = ak.to_numpy(event_record["reco_daughter_PFP_shower_spacePts_R"])
-        theta = ak.to_numpy(event_record["reco_daughter_PFP_shower_spacePts_Theta"])
-        phi = ak.to_numpy(event_record["reco_daughter_PFP_shower_spacePts_Phi"])
-        charge = ak.to_numpy(event_record["reco_all_spacePts_Integral"])
-        em_score = ak.to_numpy(event_record["reco_all_spacePts_EMScore"])
+        pts_shift = self.get_vertex(event_record=event_record, event=event)
 
-        return np.vstack((r, np.degrees(theta), np.degrees(phi), charge, em_score)).T
+        pts = np.vstack((ak.to_numpy(event_record["reco_all_spacePts_X", event]) - pts_shift[0],
+                         ak.to_numpy(event_record["reco_all_spacePts_Y", event]) - pts_shift[1],
+                         ak.to_numpy(event_record["reco_all_spacePts_Z", event]) - pts_shift[2])).T
+
+        if cosmics:
+            cosmic_pts = np.vstack((ak.to_numpy(event_record["cosmic_pfp_spacePts_X", event]) - pts_shift[0],
+                                    ak.to_numpy(event_record["cosmic_pfp_spacePts_Y", event]) - pts_shift[1],
+                                    ak.to_numpy(event_record["cosmic_pfp_spacePts_Z", event]) - pts_shift[2])).T
+
+        if get_gammas:
+            ssdir = np.vstack((ak.to_numpy(event_record["true_beam_Pi0_decay_startPx", event]),
+                               ak.to_numpy(event_record["true_beam_Pi0_decay_startPy", event]),
+                               ak.to_numpy(event_record["true_beam_Pi0_decay_startPz", event]))).T
+
+            sdir1 = ssdir[0] / (np.sqrt(ssdir[0] @ ssdir[0]))
+            sdir2 = ssdir[1] / (np.sqrt(ssdir[1] @ ssdir[1]))
+
+            spherical_sdir1 = futil.single_to_spherical(v=sdir1, rotate_polar_axis=False).T
+            spherical_sdir2 = futil.single_to_spherical(v=sdir2, rotate_polar_axis=False).T
+
+        event_charge = ak.to_numpy(event_record["reco_all_spacePts_Integral", event])
+        spherical_pts_tmp = futil.single_to_spherical(v=pts.T).T
+        spherical_pts = np.vstack((spherical_pts_tmp[:, 0], np.degrees(spherical_pts_tmp[:, 1]),
+                                   np.degrees(spherical_pts_tmp[:, 2]), event_charge)).T
+
+        if cosmics:
+            if return_spherical:
+                spherical_cosmic_pts_tmp = futil.single_to_spherical(v=cosmic_pts.T).T
+                spherical_cosmic_pts = np.vstack((spherical_cosmic_pts_tmp[:, 0],
+                                                  np.degrees(spherical_cosmic_pts_tmp[:, 1]),
+                                                  np.degrees(spherical_cosmic_pts_tmp[:, 2]))).T
+                if get_gammas:
+                    return spherical_pts, spherical_sdir1, spherical_sdir2, spherical_cosmic_pts
+                else:
+                    return spherical_pts, spherical_cosmic_pts
+            else:
+                if get_gammas:
+                    return pts, sdir1, sdir2, cosmic_pts
+                else:
+                    return pts, cosmic_pts
+        else:
+            if return_spherical:
+                if get_gammas:
+                    return spherical_pts, spherical_sdir1, spherical_sdir2
+                else:
+                    return spherical_pts
+            else:
+                if get_gammas:
+                    return pts, sdir1, sdir2
+                else:
+                    return pts
+
+    def get_vertex(self, event_record, event):
+
+        xt = event_record["true_beam_endX_SCE", event]
+        yt = event_record["true_beam_endY_SCE", event]
+        zt = event_record["true_beam_endZ_SCE", event]
+
+        xr = event_record["reco_beam_endX", event]
+        yr = event_record["reco_beam_endY", event]
+        zr = event_record["reco_beam_endZ", event]
+
+        delta_r = np.sqrt((xt - xr) ** 2 + (yt - yr) ** 2 + (zt - zr) ** 2)
+        print("Δx/Δy/Δz/Δr", np.round(xt - xr, 3), "/",
+                             np.round(yt - yr, 3), "/",
+                             np.round(zt - zr, 3), "/", delta_r)
+
+        vertex = [xt, yt, zt] if self.use_true_vertex else [xr, yr, zr]
+        return vertex, delta_r
 
     def get_event_truth_values(self, event_record, out_file=None):
 
-        e1, e2 = event_record["pi0_gamma_starte_initial"]
+        e1, e2 = event_record["true_beam_Pi0_decay_startP"] * 1.e3
         c1, c2 = 0., 0. #event_record["true_decay_gamma_conv_dist"]
-        oa = event_record["pi0_gamma_open_angle_initial"]
+        oa = event_record["true_beam_Pi0_decay_OA"]
 
-        ssdir = np.vstack((ak.to_numpy(event_record["pi0_gamma_startpx_initial"]),
-                           ak.to_numpy(event_record["pi0_gamma_startpy_initial"]),
-                           ak.to_numpy(event_record["pi0_gamma_startpz_initial"]))).T
+        ssdir = np.vstack((ak.to_numpy(event_record["true_beam_Pi0_decay_startPx"]),
+                           ak.to_numpy(event_record["true_beam_Pi0_decay_startPy"]),
+                           ak.to_numpy(event_record["true_beam_Pi0_decay_startPz"]))).T
 
         sdir0 = ssdir[0] / (np.sqrt(ssdir[0] @ ssdir[0]))
         sdir1 = ssdir[1] / (np.sqrt(ssdir[1] @ ssdir[1]))
@@ -107,8 +166,8 @@ class Pi0Fitter:
         cos_pi0 = (e1 + e2 * np.cos(-oa)) / ppi0
 
         if out_file is None:
-            print("True Eπ0:", np.sum(event_record["pi0_gamma_starte_initial"]))
-            print("True Gamma Eγ:", event_record["pi0_gamma_starte_initial"])
+            print("True Eπ0:", np.sum(event_record["true_beam_Pi0_decay_startP"]) * 1.e3)
+            print("True Gamma Eγ:", event_record["true_beam_Pi0_decay_startP"] * 1.e3)
             print("True OA:", np.degrees(oa))
             print("True cos_pi0:", cos_pi0)
             print("True Gamma Energy 1/2", round(e1, 2), "/", round(e2, 2))
@@ -116,8 +175,8 @@ class Pi0Fitter:
             print("True Gamma Phi 1/2", round(true_phi1, 2), "/", round(true_phi2, 2))
             print("C1/C2:", c1, "/", c2)
         else:
-            print("True Eπ0:", np.sum(event_record["pi0_gamma_starte_initial"]), file=out_file)
-            print("True Gamma Eγ:", event_record["pi0_gamma_starte_initial"], file=out_file)
+            print("True Eπ0:", np.sum(event_record["true_beam_Pi0_decay_startP"]) * 1.e3, file=out_file)
+            print("True Gamma Eγ:", event_record["true_beam_Pi0_decay_startP"] * 1.e3, file=out_file)
             print("True OA:", np.degrees(oa), file=out_file)
             print("True cos_pi0:", cos_pi0, file=out_file)
             print("True Gamma Energy 1/2", round(e1, 2), "/", round(e2, 2), file=out_file)

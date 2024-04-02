@@ -28,7 +28,7 @@ class CleanEvent:
         self.fiducial_zmin = self.config["fiducial_zmin"]
         self.fiducial_zmax = self.config["fiducial_zmax"]
 
-    def clean_event(self, spherical_pts, cartesian_pts, charge_pts, cosmic_pts, xyz_vertex):
+    def clean_event(self, spherical_pts, cartesian_pts, cosmic_pts, xyz_vertex):
         """
         Call proton removeal after this
         :param spherical_pts:
@@ -38,21 +38,27 @@ class CleanEvent:
         :param xyz_vertex:
         :return:
         """
+
         pts_fiducial_mask, cosmic_fiducial_mask = self.fiducial_cut(cartesian_pts=cartesian_pts, cosmic_pts=cosmic_pts,
                                                                     xyz_vertex=xyz_vertex)
         radius_cut = spherical_pts[:, 0] < self.rcut_high
+
+        if len(spherical_pts[pts_fiducial_mask & radius_cut]) < 1: return None, None
 
         if self.has_cosmics:
             cosmic_removed_mask = self.remove_cosmics_from_pfp(cartesian_pts=cartesian_pts[pts_fiducial_mask & radius_cut],
                                                                cosmic_pts=cosmic_pts[cosmic_fiducial_mask])
             spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut][cosmic_removed_mask]
-            charge_pts = charge_pts[pts_fiducial_mask & radius_cut][cosmic_removed_mask]
+
+        if len(spherical_pts) < 1: return None, None
 
         accum_mask = spherical_pts[:, 0] > self.rcut_low
         accum_mask &= self.beam_cut(spherical_pts=spherical_pts)
-        accum_mask &= charge_pts < self.charge_point_cut
+        accum_mask &= spherical_pts[:, 3] < self.charge_point_cut
 
-        return spherical_pts[accum_mask], charge_pts[accum_mask]
+        if len(spherical_pts[accum_mask]) < 1: return None, None
+
+        return spherical_pts[accum_mask]
 
     def fiducial_cut(self, cartesian_pts, cosmic_pts, xyz_vertex):
 

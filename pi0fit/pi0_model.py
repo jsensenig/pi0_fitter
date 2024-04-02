@@ -235,7 +235,7 @@ class BinnedPi0Model:
 
         return ~(beam_point_cos > 0.8)
 
-    def construct_event_hists(self, pi0_pts):
+    def construct_event_hists(self, pi0_pts, return_precut=False):
 
         print("Event Charge Fill")
         print("Pre-Qhist", np.sum(pi0_pts[:, 3]))
@@ -255,6 +255,9 @@ class BinnedPi0Model:
         dir_hist = self.distance_cut_2d(hist=dir_hist_tmp, X=pi0_pts[:, 0], Y=pi0_pts[:, 1], Z=pi0_pts[:, 2],
                                         Q=pi0_pts[:, 3], bins=bins, dist_lower_cut=15, dist_upper_cut=80, charge_cut=25)
         print("Charge Bins", charge_hist.shape, " Dir Bins", dir_hist.shape)
+
+        if return_precut:
+            charge_hist_tmp, dir_hist_tmp
 
         return charge_hist, dir_hist
 

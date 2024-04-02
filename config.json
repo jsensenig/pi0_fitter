@@ -8,7 +8,8 @@
     "fit_all_events": false,
     "return_pi0_only": false,
     "rotate_polar_axis": true,
-    "transform_points": true
+    "transform_points": true,
+    "use_true_vertex": false
   },
   "pi0_minimizers": {
     "debug": false,
