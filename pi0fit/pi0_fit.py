@@ -72,7 +72,7 @@ class Pi0Fitter:
 
     def get_event_points(self, event_record, event, return_spherical, cosmics=False, get_gammas=True):
 
-        pts_shift = self.get_vertex(event_record=event_record, event=event)
+        pts_shift,_ = self.get_vertex(event_record=event_record, event=event)
 
         pts = np.vstack((ak.to_numpy(event_record["reco_all_spacePts_X", event]) - pts_shift[0],
                          ak.to_numpy(event_record["reco_all_spacePts_Y", event]) - pts_shift[1],

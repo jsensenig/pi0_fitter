@@ -43,20 +43,20 @@ class CleanEvent:
                                                                     xyz_vertex=xyz_vertex)
         radius_cut = spherical_pts[:, 0] < self.rcut_high
 
-        if len(spherical_pts[pts_fiducial_mask & radius_cut]) < 1: return None, None
+        if len(spherical_pts[pts_fiducial_mask & radius_cut]) < 1: return None
 
         if self.has_cosmics:
             cosmic_removed_mask = self.remove_cosmics_from_pfp(cartesian_pts=cartesian_pts[pts_fiducial_mask & radius_cut],
                                                                cosmic_pts=cosmic_pts[cosmic_fiducial_mask])
             spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut][cosmic_removed_mask]
 
-        if len(spherical_pts) < 1: return None, None
+        if len(spherical_pts) < 1: return None
 
         accum_mask = spherical_pts[:, 0] > self.rcut_low
         accum_mask &= self.beam_cut(spherical_pts=spherical_pts)
         accum_mask &= spherical_pts[:, 3] < self.charge_point_cut
 
-        if len(spherical_pts[accum_mask]) < 1: return None, None
+        if len(spherical_pts[accum_mask]) < 1: return None
 
         return spherical_pts[accum_mask]
 
@@ -189,7 +189,7 @@ class CleanEvent:
             valid_chi2 = (chi2_proton > -100) and (chi2_proton != 1) and (chi2_proton < self.proton_chi2_cut)
             loose_chi2 = (chi2_proton > -100) and (chi2_proton != 1) and (chi2_proton < 200.)
             charged_daughter = (chi2_proton < 50.) and (chi2_proton != 1.0)
-            if (valid_nhit and valid_chi2) or charged_daughter or (loose_chi2 and valid_distance and valid_nhit):
+            if (valid_nhit and (valid_chi2 or charged_daughter)) or (loose_chi2 and valid_distance and valid_nhit):
                 proton_dir = np.array([[1., np.radians(theta), np.radians(phi)]])
                 for shower in shower_dict:
                     too_close_to_shower = futil.spherical_dot(proton_dir, shower_dict[shower]) > 0.9

@@ -53,6 +53,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         self.maxiter = self.config["maxiter"] # 2k
         self.restart_temp_ratio = self.config["restart_temp_ratio"]
         self.use_scan_start = self.config["use_scan_start"]
+        self.minimizer_workers = self.config["minimizer_workers"]
 
         self.total_event_charge = 0.
 
@@ -102,7 +103,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
             min_res2 = differential_evolution(self.model_interface,
                                               args=(charge_hist, dir_hist, energy_from_calo, dir_norm, two_shower),
                                               bounds=bounds, popsize=60, tol=1.e-5, mutation=(0.01, mup), x0=start_pt,
-                                              constraints=[nlc_oa_min], maxiter=25000, workers=-1)
+                                              constraints=[nlc_oa_min], maxiter=25000, workers=self.minimizer_workers)
                                               #constraints = [nlc_oa_min, nlc_inv_mass, nlc_energy_down, nlc_energy_up],
             min_fval_list.append(min_res2.fun)
             min_list.append(min_res2)
@@ -249,7 +250,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
 
         return calculated_e1, epi0 - calculated_e1
 
-    def energy_from_shower_direction(self, pts, open_angle, theta1, theta2, phi1, phi2, print_stuff=False):
+    def energy_from_shower_direction(self, pts, epi0, open_angle, theta1, theta2, phi1, phi2, print_stuff=False):
 
         ones = np.ones(len(pts), dtype=bool)
 
@@ -271,8 +272,10 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         qtotal = np.sum(pts[:, 3][charge_save_mask1 | charge_save_mask2])
 
         calo_epi0 = self.pi0_model.calo_to_energy(charge=qtotal)
+        print("Epi0 fit/calo:", epi0, "/", calo_epi0)
 
         tmp_e1, tmp_e2 = self.calculate_shower_energy(epi0=calo_epi0, open_angle=open_angle)
+        #tmp_e1, tmp_e2 = self.calculate_shower_energy(epi0=epi0, open_angle=open_angle)
         calc_energy1, calc_energy2 = (tmp_e1, tmp_e2) if qsum1 > qsum2 else (tmp_e2, tmp_e1)
 
         if print_stuff:
@@ -280,6 +283,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
             print("S2: E", int(calc_energy2), "MeV")
 
         return calo_epi0, calc_energy1, calc_energy2
+        #return epi0, calc_energy1, calc_energy2
 
     def show_results(self, minimizer, pts, truth_values):
         """
@@ -301,7 +305,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
 
         # epi0 = minimizer.x[0]
         # eg1, eg2 = self.calculate_shower_energy(epi0=epi0, open_angle=open_angle)
-        epi0, eg1, eg2 = self.energy_from_shower_direction(pts=pts, open_angle=open_angle, theta1=minimizer.x[shift+2],
+        epi0, eg1, eg2 = self.energy_from_shower_direction(pts=pts, epi0=minimizer.x[0], open_angle=open_angle, theta1=minimizer.x[shift+2],
                                                            theta2=minimizer.x[shift+3], phi1=minimizer.x[shift+4],
                                                            phi2=minimizer.x[shift+5])
 

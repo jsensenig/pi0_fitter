@@ -16,9 +16,9 @@ class Diagnostics:
         self.pi0_model = BinnedPi0Model(config=config)
         self.clean_event = CleanEvent(config=config)
 
-    def show_pi0_event(self, event_record, event, show_daughters=False, show_gammas=True):
+    def show_pi0_event(self, event_record, event, show_daughters=False, show_gammas=True, plot_axes='yz', return_precut=False):
 
-        xyz_vertex = self.pi0_fit.get_vertex(event_record=event_record, event=event)
+        xyz_vertex,_ = self.pi0_fit.get_vertex(event_record=event_record, event=event)
 
         cartesian_pts, cosmic_pts = self.pi0_fit.get_event_points(event_record=event_record, event=event,
                                                                   return_spherical=False, cosmics=True, get_gammas=False)
@@ -27,12 +27,12 @@ class Diagnostics:
                                                                return_spherical=True, cosmics=False, get_gammas=False)
 
         valid_cosmic_mask = self.clean_event.cosmic_selection(event_record=event_record, evt=event, hit_cut=200)
-        cleaned_spherical_pts, cleaned_charge = self.clean_event.clean_event(spherical_pts=preclean_spherical_pts,
+        cleaned_spherical_pts = self.clean_event.clean_event(spherical_pts=preclean_spherical_pts,
                                                                              cartesian_pts=cartesian_pts,
                                                                              cosmic_pts=cosmic_pts[valid_cosmic_mask],
                                                                              xyz_vertex=xyz_vertex)
 
-        if cleaned_charge is None:
+        if cleaned_spherical_pts is None:
             print("No points survived cuts!")
             return
 
@@ -43,15 +43,12 @@ class Diagnostics:
             print("No points survived cuts!")
             return
 
-        cleaned_pi0_pts = np.vstack((cleaned_spherical_pts[no_proton_mask][:, 0],
-                                     cleaned_spherical_pts[no_proton_mask][:, 1],
-                                     cleaned_spherical_pts[no_proton_mask][:, 2],
-                                     cleaned_charge[no_proton_mask])).T
-
+        sdir1, sdir2 = None, None
         if show_gammas:
             _, sdir1, sdir2 = self.pi0_fit.get_event_points(event_record=event_record, event=event, return_spherical=True,
                                                             cosmics=False, get_gammas=show_gammas)
 
+        daughters, momentum = None, None
         if show_daughters:
             daughters, momentum = self.get_pesky_daughters(event_record=event_record[event])
 
@@ -60,20 +57,39 @@ class Diagnostics:
         # Pre-cut histogram
         _, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=preclean_spherical_pts, return_precut=True)
         self.plot_histogram(ax=ax1, hist=dir_hist, sdir1=sdir1, sdir2=sdir2, daughters=daughters, momentum=momentum,
-                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas, show_daughters=show_daughters)
+                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas, show_daughters=show_daughters,
+                            plot_axes=plot_axes)
 
         # Post-cut histogram
-        _, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=cleaned_pi0_pts, return_precut=False)
+        _, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=cleaned_spherical_pts[no_proton_mask], return_precut=return_precut)
         self.plot_histogram(ax=ax2, hist=dir_hist, sdir1=sdir1, sdir2=sdir2, daughters=daughters, momentum=momentum,
-                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas, show_daughters=show_daughters)
+                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas, show_daughters=show_daughters,
+                            plot_axes=plot_axes)
 
         plt.show()
 
     @staticmethod
-    def plot_histogram(ax, hist, sdir1, sdir2, daughters, momentum, dir_bins, show_gammas, show_daughters):
-        bx, by = np.meshgrid(dir_bins[1], dir_bins[2], indexing='ij')
+    def plot_histogram(ax, hist, sdir1, sdir2, daughters, momentum, dir_bins, show_gammas, show_daughters, plot_axes):
 
-        f = ax.scatter(bx, by, c=np.sum(hist, axis=0), s=50, cmap=plt.cm.jet, norm=LogNorm(vmax=5e3, vmin=5))
+        if plot_axes == 'xy':
+            sum_axis = 2
+            xlim_down, xlim_up = 0, 200
+            ylim_down, ylim_up = 0, 180
+            bx, by = np.meshgrid(dir_bins[0], dir_bins[1], indexing='ij')
+        elif plot_axes == 'xz':
+            sum_axis = 1
+            xlim_down, xlim_up = 0, 200
+            ylim_down, ylim_up = -180, 180
+            bx, by = np.meshgrid(dir_bins[0], dir_bins[2], indexing='ij')
+        elif plot_axes == 'yz':
+            sum_axis = 0
+            xlim_down, xlim_up = 0, 180
+            ylim_down, ylim_up = -180, 180
+            bx, by = np.meshgrid(dir_bins[1], dir_bins[2], indexing='ij')
+        else:
+            print('Unknown axis!', plot_axes)
+
+        f = ax.scatter(bx, by, c=np.sum(hist, axis=sum_axis), s=50, cmap=plt.cm.jet, norm=LogNorm(vmax=5e3, vmin=5))
         if show_gammas:
             ax.plot(np.degrees(sdir1[1]), np.degrees(sdir1[2]), marker='*', markersize=12, color='magenta')
             ax.plot(np.degrees(sdir2[1]), np.degrees(sdir2[2]), marker='*', markersize=12, color='magenta')
@@ -81,8 +97,8 @@ class Diagnostics:
             for d, p in zip(daughters, momentum):
                 ax.plot(d[1], d[2], marker='*', markersize=12, color='orange')
                 ax.text(d[1], d[2], str(int(p)), color="red", fontsize=10)
-        ax.set_xlim(0, 180)
-        ax.set_ylim(-180, 180)
+        ax.set_xlim(xlim_down, xlim_up)
+        ax.set_ylim(ylim_down, ylim_up)
         plt.colorbar(f)
 
     @staticmethod
@@ -106,7 +122,7 @@ class Diagnostics:
         return daughter_list, event_record["true_beam_daughter_startP"][valid_daughter] * 1000.
 
     @staticmethod
-    def truth_reco_comparison(dir_list, elist, sdir0, sdir1):
+    def truth_reco_comparison(dir_list, elist, sdir0, sdir1, print_stuff):
 
         elist = np.asarray(elist)
         dir_list = np.asarray(dir_list)
@@ -152,24 +168,25 @@ class Diagnostics:
 
         open_angle = np.arccos(futil.spherical_dot(np.array([[1, np.radians(reco_a1), np.radians(reco_p1)]]),
                                                    np.array([[1, np.radians(reco_a2), np.radians(reco_p2)]])))
-        print("OA", np.degrees(open_angle))
+        if print_stuff: print("OA", np.degrees(open_angle))
 
         cos_true_reco1 = futil.spherical_dot(np.array([[1, np.radians(reco_a1), np.radians(reco_p1)]]),
                                              np.array([[1, np.radians(true_a1), np.radians(true_p1)]]))[0]
         cos_true_reco2 = futil.spherical_dot(np.array([[1, np.radians(reco_a2), np.radians(reco_p2)]]),
                                              np.array([[1, np.radians(true_a2), np.radians(true_p2)]]))[0]
-        print("Cosθ", np.round(cos_true_reco1, 2), "/", np.round(cos_true_reco2, 2), " -- ", np.round(reco_e1, 2), "/",
-              np.round(reco_e2, 2))
+        if print_stuff:
+            print("Cosθ", np.round(cos_true_reco1, 2), "/", np.round(cos_true_reco2, 2), " -- ", np.round(reco_e1, 2), "/",
+                  np.round(reco_e2, 2))
 
         alt_cos_true_reco1 = futil.spherical_dot(np.array([[1, np.radians(reco_a2), np.radians(reco_p2)]]),
                                                  np.array([[1, np.radians(true_a1), np.radians(true_p1)]]))[0]
         alt_cos_true_reco2 = futil.spherical_dot(np.array([[1, np.radians(reco_a1), np.radians(reco_p1)]]),
                                                  np.array([[1, np.radians(true_a2), np.radians(true_p2)]]))[0]
-        print("AltCosθ", np.round(alt_cos_true_reco1, 2), "/", np.round(alt_cos_true_reco2, 2))
+        if print_stuff: print("AltCosθ", np.round(alt_cos_true_reco1, 2), "/", np.round(alt_cos_true_reco2, 2))
 
         return [cos_true_reco1, cos_true_reco2]
 
-    def compare_to_pandora(self, event_record, event_list, nhit_cut=20, make_plots=False):
+    def compare_to_pandora(self, event_record, event_list, nhit_cut=20, make_plots=False, print_stuff=False):
         num_gamma_list = []
         energy_list = []
         true_energy_list = []
@@ -178,7 +195,7 @@ class Diagnostics:
             # print("--> Evt:", event, " | ", event_record["true_beam_Pi0_decay_startP", event] * 1.e3, "=",
             #       np.sum(event_record["true_beam_Pi0_decay_startP", event] * 1.e3))
 
-            _, _, sdir0, sdir1, _ = self.pi0_fit.get_event_points(event_record=event_record, event=event,
+            _, sdir0, sdir1 = self.pi0_fit.get_event_points(event_record=event_record, event=event,
                                                                   return_spherical=True, cosmics=False)
             sdx = event_record["reco_daughter_allShower_dirX", event]
             sdy = event_record["reco_daughter_allShower_dirY", event]
@@ -191,16 +208,17 @@ class Diagnostics:
 
             num_gamma, total_energy = 0, 0
             dir_list = []
-            energy_list = []
+            evt_energy_list = []
             for pdg, nhits, energy, x, y, z in zip(daughter_pdg, daughter_nhit, daughter_energy, sdx, sdy, sdz):
                 if pdg == 22 and nhits > nhit_cut:
                     num_gamma += 1
                     total_energy += energy if energy > 0 else 0.
                     dir_list.append([x, y, z])
-                    energy_list.append(energy)
+                    evt_energy_list.append(energy)
 
-            print("Total Energy:", total_energy)
-            dir_res = self.truth_reco_comparison(dir_list=dir_list, elist=energy_list, sdir0=sdir0, sdir1=sdir1)
+            if print_stuff: print("Total Energy:", total_energy)
+            dir_res = self.truth_reco_comparison(dir_list=dir_list, elist=evt_energy_list, sdir0=sdir0, 
+                                                 sdir1=sdir1, print_stuff=print_stuff)
 
             direction_res_list.append(dir_res)
             num_gamma_list.append(num_gamma)
