@@ -28,6 +28,30 @@ class CleanEvent:
         self.fiducial_zmin = self.config["fiducial_zmin"]
         self.fiducial_zmax = self.config["fiducial_zmax"]
 
+        self.rcut_radius = self.config["rcut_radius"]
+        self.rcut_theta = self.config["rcut_theta"] # 175, 140
+        self.rcut_radius_center = self.config["rcut_radius_center"]
+        self.rcut_theta_center = self.config["rcut_theta_center"]
+
+        self.cut_list = ["radius_cut", "fiducial_cut", "cosmics_cut", "vertex_cut",
+                         "beam_cut", "charge_cut", "proton_cut","hist_cut"]
+        self._cut_points = None
+        self._cut_name = None
+
+    @property
+    def cut_points(self):
+        return self._cut_points
+
+    @property
+    def cut_name(self):
+        return self._cut_name
+
+    @cut_name.setter
+    def cut_name(self, cut):
+        if cut not in self.cut_list:
+            raise ValueError
+        self._cut_name = cut
+
     def clean_event(self, spherical_pts, cartesian_pts, cosmic_pts, xyz_vertex):
         """
         Call proton removeal after this
@@ -41,7 +65,10 @@ class CleanEvent:
 
         pts_fiducial_mask, cosmic_fiducial_mask = self.fiducial_cut(cartesian_pts=cartesian_pts, cosmic_pts=cosmic_pts,
                                                                     xyz_vertex=xyz_vertex)
-        radius_cut = spherical_pts[:, 0] < self.rcut_high
+        if self._cut_name == "fiducial_cut": self._cut_points = spherical_pts[pts_fiducial_mask]
+
+        radius_cut = self.radius_cut(pi0_pts=spherical_pts, simple_rcut=True)
+        if self._cut_name == "radius_cut": self._cut_points = spherical_pts[pts_fiducial_mask & radius_cut]
 
         if len(spherical_pts[pts_fiducial_mask & radius_cut]) < 1: return None
 
@@ -49,22 +76,54 @@ class CleanEvent:
             cosmic_removed_mask = self.remove_cosmics_from_pfp(cartesian_pts=cartesian_pts[pts_fiducial_mask & radius_cut],
                                                                cosmic_pts=cosmic_pts[cosmic_fiducial_mask])
             spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut][cosmic_removed_mask]
+            if self._cut_name == "cosmics_cut": self._cut_points = spherical_pts
 
         if len(spherical_pts) < 1: return None
 
         accum_mask = spherical_pts[:, 0] > self.rcut_low
+        if self._cut_name == "vertex_cut": self._cut_points = spherical_pts[accum_mask]
+
         accum_mask &= self.beam_cut(spherical_pts=spherical_pts)
+        if self._cut_name == "beam_cut": self._cut_points = spherical_pts[accum_mask]
+
         accum_mask &= spherical_pts[:, 3] < self.charge_point_cut
+        if self._cut_name == "charge_cut": self._cut_points = spherical_pts[accum_mask]
 
         if len(spherical_pts[accum_mask]) < 1: return None
 
         return spherical_pts[accum_mask]
 
+    def radius_cut(self, pi0_pts, simple_rcut=True):
+
+        if simple_rcut:
+            return pi0_pts[:, 0] < self.rcut_high
+
+        radius, theta = self.rcut_radius, self.rcut_theta
+        radius_center, theta_center = self.rcut_radius_center, self.rcut_theta_center
+
+        angle = np.arctan2(pi0_pts[:, 1], pi0_pts[:, 0])
+        sp_dist = np.sqrt(pi0_pts[:, 0] * pi0_pts[:, 0] + pi0_pts[:, 1] * pi0_pts[:, 1])
+
+        cut_dist = np.sqrt((radius * np.cos(angle)) ** 2 + (theta_center + theta * np.sin(angle)) ** 2)
+
+        return sp_dist < cut_dist
+
     def fiducial_cut(self, cartesian_pts, cosmic_pts, xyz_vertex):
 
-        xdown, xup = (-300 - xyz_vertex[0]), (50 - xyz_vertex[0])
-        ydown, yup = (0 - 300), 100
-        zdown, zup = (0 - xyz_vertex[2] if xyz_vertex[2] < 100 else -100.), (150 + xyz_vertex[2])
+        cut = "very_new"
+        if cut == "old":
+            xdown, xup = (-300 - xyz_vertex[0]), (50 - xyz_vertex[0])
+            zdown, zup = (0 - xyz_vertex[2] if xyz_vertex[2] < 100 else -100.), (150 + xyz_vertex[2])
+        elif cut == "new":
+            distz, distx = 175, 150
+            xdown = -distx if xyz_vertex[0] > (distx - 360) else -360. - xyz_vertex[0]
+            xup = distx #if xyz_vertex[0] < -150 else 0. - xyz_vertex[0]
+            zdown = (0. - xyz_vertex[2]) if xyz_vertex[2] < 100 else -100.
+            zup = (distz + xyz_vertex[2])
+        elif cut == "very_new":
+            xdown, xup = -150, 150
+            zdown = (0. - xyz_vertex[2]) if xyz_vertex[2] < 100 else -100.
+            zup = 175
 
         fiducial_cut_mask = ((cartesian_pts[:, 0] > xdown) & (cartesian_pts[:, 0] < xup) &
                              (cartesian_pts[:, 2] > zdown) & (cartesian_pts[:, 2] < zup))

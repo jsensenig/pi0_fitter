@@ -16,6 +16,43 @@ class Diagnostics:
         self.pi0_model = BinnedPi0Model(config=config)
         self.clean_event = CleanEvent(config=config)
 
+    def plot_cut_steps(self, event_record, event, cut_name, cosmic_nhit, plot_axes='yz'):
+
+        xyz_vertex, dr = self.pi0_fit.get_vertex(event_record=event_record, event=event)
+        print('Vertex xyz:', xyz_vertex)
+
+        cartesian_pts, cosmic_pts = self.pi0_fit.get_event_points(event_record=event_record, event=event,
+                                                                  return_spherical=False, cosmics=True, get_gammas=False)
+        spherical_pts = self.pi0_fit.get_event_points(event_record=event_record, event=event,
+                                                      return_spherical=True, cosmics=False, get_gammas=False)
+
+        valid_cosmic_mask = self.clean_event.cosmic_selection(event_record=event_record, evt=event, hit_cut=cosmic_nhit)
+
+        ###############################
+        self.clean_event.cut_name = cut_name
+        tmp_cleaned_pts = self.clean_event.clean_event(spherical_pts=spherical_pts, cartesian_pts=cartesian_pts,
+                                     cosmic_pts=cosmic_pts[valid_cosmic_mask], xyz_vertex=xyz_vertex)
+        cleaned_spherical_pts = \
+            self.clean_event.cut_points if cut_name != "proton_cut" and cut_name != "hist_cut" else tmp_cleaned_pts
+
+        if cut_name == "proton_cut":
+            no_proton_mask = self.clean_event.proton_cut(event_record=event_record, spherical_pts=cleaned_spherical_pts,
+                                                         event=event, xyz_shift=xyz_vertex)
+            cleaned_spherical_pts = cleaned_spherical_pts[no_proton_mask]
+
+        if len(cleaned_spherical_pts) < 1:
+            print("No points survived cuts!")
+            return
+
+        precut = cut_name != "hist_cut"
+        charge_hist, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=cleaned_spherical_pts, return_precut=precut)
+        print("Total Energy:", self.pi0_model.calo_to_energy(charge=np.sum(charge_hist)))
+
+        _, (ax1) = plt.subplots(1, 1, figsize=(10, 6))
+        self.plot_histogram(ax=ax1, hist=dir_hist, sdir1=None, sdir2=None, daughters=None, momentum=None,
+                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=False,
+                            show_daughters=False, plot_axes=plot_axes)
+
     def show_pi0_event(self, event_record, event, show_daughters=False, show_gammas=True, plot_axes='yz', return_precut=False):
 
         xyz_vertex,_ = self.pi0_fit.get_vertex(event_record=event_record, event=event)
@@ -69,7 +106,8 @@ class Diagnostics:
         plt.show()
 
     @staticmethod
-    def plot_histogram(ax, hist, sdir1, sdir2, daughters, momentum, dir_bins, show_gammas, show_daughters, plot_axes):
+    def plot_histogram(ax, hist, sdir1, sdir2, daughters, momentum, dir_bins,
+                                 show_gammas, show_daughters, plot_axes):
 
         if plot_axes == 'xy':
             sum_axis = 2

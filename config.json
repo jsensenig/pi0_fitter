@@ -78,6 +78,10 @@
      "fiducial_ymin": 50,
      "fiducial_ymax": 550,
      "fiducial_zmin": 20,
-     "fiducial_zmax": 400
+     "fiducial_zmax": 400,
+    "rcut_radius": 175,
+    "rcut_theta": 140,
+    "rcut_radius_center": 0,
+    "rcut_theta_center": 30
   }
 }
