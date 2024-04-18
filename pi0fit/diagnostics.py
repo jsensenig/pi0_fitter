@@ -15,8 +15,13 @@ class Diagnostics:
         self.pi0_fit = pi0fit.Pi0Fitter(config=config)
         self.pi0_model = BinnedPi0Model(config=config)
         self.clean_event = CleanEvent(config=config)
+        self._cut_list = self.clean_event.cut_list
 
-    def plot_cut_steps(self, event_record, event, cut_name, cosmic_nhit, plot_axes='yz'):
+    @property
+    def cut_list(self):
+        return self._cut_list
+
+    def plot_cut_steps(self, event_record, event, cut_name, cosmic_nhit, show_gammas, show_daughters, plot_axes='yz'):
 
         xyz_vertex, dr = self.pi0_fit.get_vertex(event_record=event_record, event=event)
         print('Vertex xyz:', xyz_vertex)
@@ -49,9 +54,9 @@ class Diagnostics:
         print("Total Energy:", self.pi0_model.calo_to_energy(charge=np.sum(charge_hist)))
 
         _, (ax1) = plt.subplots(1, 1, figsize=(10, 6))
-        self.plot_histogram(ax=ax1, hist=dir_hist, sdir1=None, sdir2=None, daughters=None, momentum=None,
-                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=False,
-                            show_daughters=False, plot_axes=plot_axes)
+        self.plot_histogram(event_record=event_record, event=event, ax=ax1, hist=dir_hist,
+                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas,
+                            show_daughters=show_daughters, plot_axes=plot_axes)
 
     def show_pi0_event(self, event_record, event, show_daughters=False, show_gammas=True, plot_axes='yz', return_precut=False):
 
@@ -80,34 +85,23 @@ class Diagnostics:
             print("No points survived cuts!")
             return
 
-        sdir1, sdir2 = None, None
-        if show_gammas:
-            _, sdir1, sdir2 = self.pi0_fit.get_event_points(event_record=event_record, event=event, return_spherical=True,
-                                                            cosmics=False, get_gammas=show_gammas)
-
-        daughters, momentum = None, None
-        if show_daughters:
-            daughters, momentum = self.get_pesky_daughters(event_record=event_record[event])
-
         _, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
         # Pre-cut histogram
         _, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=preclean_spherical_pts, return_precut=True)
-        self.plot_histogram(ax=ax1, hist=dir_hist, sdir1=sdir1, sdir2=sdir2, daughters=daughters, momentum=momentum,
-                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas, show_daughters=show_daughters,
-                            plot_axes=plot_axes)
+        self.plot_histogram(event_record=event_record, event=event, ax=ax1, hist=dir_hist,
+                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas,
+                            show_daughters=show_daughters, plot_axes=plot_axes)
 
         # Post-cut histogram
         _, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=cleaned_spherical_pts[no_proton_mask], return_precut=return_precut)
-        self.plot_histogram(ax=ax2, hist=dir_hist, sdir1=sdir1, sdir2=sdir2, daughters=daughters, momentum=momentum,
-                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas, show_daughters=show_daughters,
-                            plot_axes=plot_axes)
+        self.plot_histogram(event_record=event_record, event=event, ax=ax2, hist=dir_hist,
+                            dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas,
+                            show_daughters=show_daughters, plot_axes=plot_axes)
 
         plt.show()
 
-    @staticmethod
-    def plot_histogram(ax, hist, sdir1, sdir2, daughters, momentum, dir_bins,
-                                 show_gammas, show_daughters, plot_axes):
+    def plot_histogram(self, event_record, event, ax, hist, dir_bins, show_gammas, show_daughters, plot_axes):
 
         if plot_axes == 'xy':
             sum_axis = 2
@@ -126,6 +120,15 @@ class Diagnostics:
             bx, by = np.meshgrid(dir_bins[1], dir_bins[2], indexing='ij')
         else:
             print('Unknown axis!', plot_axes)
+
+        sdir1, sdir2 = None, None
+        if show_gammas:
+            _, sdir1, sdir2 = self.pi0_fit.get_event_points(event_record=event_record, event=event, return_spherical=True,
+                                                            cosmics=False, get_gammas=show_gammas)
+
+        daughters, momentum = None, None
+        if show_daughters:
+            daughters, momentum = self.get_pesky_daughters(event_record=event_record[event])
 
         f = ax.scatter(bx, by, c=np.sum(hist, axis=sum_axis), s=50, cmap=plt.cm.jet, norm=LogNorm(vmax=5e3, vmin=5))
         if show_gammas:

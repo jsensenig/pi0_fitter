@@ -33,10 +33,14 @@ class CleanEvent:
         self.rcut_radius_center = self.config["rcut_radius_center"]
         self.rcut_theta_center = self.config["rcut_theta_center"]
 
-        self.cut_list = ["radius_cut", "fiducial_cut", "cosmics_cut", "vertex_cut",
-                         "beam_cut", "charge_cut", "proton_cut","hist_cut"]
+        self._cut_list = ["pre_cut", "radius_cut", "fiducial_cut", "cosmics_cut", "vertex_cut",
+                         "beam_cut", "charge_cut", "proton_cut", "hist_cut"]
         self._cut_points = None
         self._cut_name = None
+
+    @property
+    def cut_list(self):
+        return self._cut_list
 
     @property
     def cut_points(self):
@@ -62,6 +66,7 @@ class CleanEvent:
         :param xyz_vertex:
         :return:
         """
+        if self._cut_name == "pre_cut": self._cut_points = spherical_pts
 
         pts_fiducial_mask, cosmic_fiducial_mask = self.fiducial_cut(cartesian_pts=cartesian_pts, cosmic_pts=cosmic_pts,
                                                                     xyz_vertex=xyz_vertex)
