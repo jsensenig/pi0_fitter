@@ -21,7 +21,7 @@ class Diagnostics:
     def cut_list(self):
         return self._cut_list
 
-    def plot_cut_steps(self, event_record, event, cut_name, cosmic_nhit, show_gammas, show_daughters, plot_axes='yz'):
+    def plot_cut_steps(self, event_record, event, cut_name, cosmic_nhit, show_gammas, show_daughters, pre_hist_cut, plot_axes='yz'):
 
         xyz_vertex, dr = self.pi0_fit.get_vertex(event_record=event_record, event=event)
         print('Vertex xyz:', xyz_vertex)
@@ -50,13 +50,16 @@ class Diagnostics:
             return
 
         precut = cut_name != "hist_cut"
-        charge_hist, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=cleaned_spherical_pts, return_precut=precut)
-        print("Total Energy:", self.pi0_model.calo_to_energy(charge=np.sum(charge_hist)))
+        charge_hist, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=cleaned_spherical_pts, return_precut=pre_hist_cut)
+        total_energy = self.pi0_model.calo_to_energy(charge=np.sum(charge_hist))
+        print("Total Energy:", total_energy)
 
-        _, (ax1) = plt.subplots(1, 1, figsize=(10, 6))
+        _, (ax1) = plt.subplots(1, 1, figsize=(9, 7))
         self.plot_histogram(event_record=event_record, event=event, ax=ax1, hist=dir_hist,
                             dir_bins=self.pi0_model.direction_dict['bins'], show_gammas=show_gammas,
                             show_daughters=show_daughters, plot_axes=plot_axes)
+
+        return total_energy
 
     def show_pi0_event(self, event_record, event, show_daughters=False, show_gammas=True, plot_axes='yz', return_precut=False):
 
@@ -130,7 +133,7 @@ class Diagnostics:
         if show_daughters:
             daughters, momentum = self.get_pesky_daughters(event_record=event_record[event])
 
-        f = ax.scatter(bx, by, c=np.sum(hist, axis=sum_axis), s=50, cmap=plt.cm.jet, norm=LogNorm(vmax=5e3, vmin=5))
+        f = ax.scatter(bx, by, c=np.sum(hist, axis=sum_axis), marker='s', s=50, cmap=plt.cm.jet, norm=LogNorm(vmax=5e3, vmin=5))
         if show_gammas:
             ax.plot(np.degrees(sdir1[1]), np.degrees(sdir1[2]), marker='*', markersize=12, color='magenta')
             ax.plot(np.degrees(sdir2[1]), np.degrees(sdir2[2]), marker='*', markersize=12, color='magenta')

@@ -242,22 +242,25 @@ class BinnedPi0Model:
         hist, bins = np.histogramdd(pi0_pts[:, :3], bins=self.charge_bins, range=((0, 450), (0, 180), (-180, 180)))
         charge_hist_tmp = self.set_bin_charge_3d(hist=hist, X=pi0_pts[:, 0], Y=pi0_pts[:, 1],
                                              Z=pi0_pts[:, 2], Q=pi0_pts[:, 3], bins=bins)
-        # charge_hist[charge_hist < 20.] = 0.
-        charge_hist = self.distance_cut_2d(hist=charge_hist_tmp, X=pi0_pts[:, 0], Y=pi0_pts[:, 1], Z=pi0_pts[:, 2],
-                                           Q=pi0_pts[:, 3], bins=bins, dist_lower_cut=15, dist_upper_cut=80, charge_cut=80)
+
+        charge_hist = charge_hist_tmp if return_precut else self.distance_cut_2d(hist=charge_hist_tmp, X=pi0_pts[:, 0],
+                                                                         Y=pi0_pts[:, 1], Z=pi0_pts[:, 2],
+                                                                         Q=pi0_pts[:, 3], bins=bins,
+                                                                         dist_lower_cut=15, dist_upper_cut=80,
+                                                                         charge_cut=80)
+
         print("Qhist", np.sum(charge_hist), "Calo Energy", self.calo_to_energy(charge=np.sum(charge_hist)))
 
         hist, bins = np.histogramdd(pi0_pts[:, :3], bins=self.direction_bins, range=((0, 450), (0, 180), (-180, 180)))
         dir_hist_tmp = self.set_bin_charge_3d(hist=hist, X=pi0_pts[:, 0], Y=pi0_pts[:, 1],
                                           Z=pi0_pts[:, 2], Q=pi0_pts[:, 3], bins=bins)
 
-        # dir_hist[dir_hist < 10.] = 0.
-        dir_hist = self.distance_cut_2d(hist=dir_hist_tmp, X=pi0_pts[:, 0], Y=pi0_pts[:, 1], Z=pi0_pts[:, 2],
-                                        Q=pi0_pts[:, 3], bins=bins, dist_lower_cut=15, dist_upper_cut=80, charge_cut=25)
-        print("Charge Bins", charge_hist.shape, " Dir Bins", dir_hist.shape)
+        dir_hist = dir_hist_tmp if return_precut else self.distance_cut_2d(hist=dir_hist_tmp, X=pi0_pts[:, 0],
+                                                                           Y=pi0_pts[:, 1], Z=pi0_pts[:, 2],
+                                                                           Q=pi0_pts[:, 3], bins=bins, dist_lower_cut=15,
+                                                                           dist_upper_cut=80, charge_cut=25)
 
-        if return_precut:
-            charge_hist_tmp, dir_hist_tmp
+        print("Charge Bins", charge_hist.shape, " Dir Bins", dir_hist.shape)
 
         return charge_hist, dir_hist
 

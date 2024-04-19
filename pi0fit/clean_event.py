@@ -72,7 +72,7 @@ class CleanEvent:
                                                                     xyz_vertex=xyz_vertex)
         if self._cut_name == "fiducial_cut": self._cut_points = spherical_pts[pts_fiducial_mask]
 
-        radius_cut = self.radius_cut(pi0_pts=spherical_pts, simple_rcut=True)
+        radius_cut = self.radius_cut(pi0_pts=spherical_pts, simple_rcut=False)
         if self._cut_name == "radius_cut": self._cut_points = spherical_pts[pts_fiducial_mask & radius_cut]
 
         if len(spherical_pts[pts_fiducial_mask & radius_cut]) < 1: return None
@@ -82,6 +82,8 @@ class CleanEvent:
                                                                cosmic_pts=cosmic_pts[cosmic_fiducial_mask])
             spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut][cosmic_removed_mask]
             if self._cut_name == "cosmics_cut": self._cut_points = spherical_pts
+        else:
+            spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut]
 
         if len(spherical_pts) < 1: return None
 
@@ -250,10 +252,10 @@ class CleanEvent:
                   np.round(chi2_proton, 2), "/", np.round(dr, 2), " [", dpdg, "]")
             valid_nhit = (nhits > self.daughter_nhit_cut) and (nhits < 900)
             valid_distance = dr < 1.
-            valid_chi2 = (chi2_proton > -100) and (chi2_proton != 1) and (chi2_proton < self.proton_chi2_cut)
-            loose_chi2 = (chi2_proton > -100) and (chi2_proton != 1) and (chi2_proton < 200.)
-            charged_daughter = (chi2_proton < 50.) and (chi2_proton != 1.0)
-            if (valid_nhit and (valid_chi2 or charged_daughter)) or (loose_chi2 and valid_distance and valid_nhit):
+            valid_chi2 = (chi2_proton > -100) and (chi2_proton < self.proton_chi2_cut)
+            loose_chi2 = (chi2_proton > -100) and (chi2_proton < 200.)
+            #charged_daughter = (chi2_proton < 50.) and (chi2_proton != 1.0)
+            if (valid_nhit and valid_chi2) or (loose_chi2 and valid_distance and valid_nhit):
                 proton_dir = np.array([[1., np.radians(theta), np.radians(phi)]])
                 for shower in shower_dict:
                     too_close_to_shower = futil.spherical_dot(proton_dir, shower_dict[shower]) > 0.9
