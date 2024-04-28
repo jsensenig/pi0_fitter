@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import numpy as np
+import cupy as cp
 from scipy.optimize import NonlinearConstraint, dual_annealing, differential_evolution
 
 from pi0fit.pi0_model import Pi0Model, BinnedPi0Model
@@ -80,7 +81,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         else:
             print("Start Point:", start_pt, file=self.out_file)
 
-        charge_hist, dir_hist = self.pi0_model.construct_event_hists(pi0_pts=pi0_points)
+        charge_hist, tmp_dir_hist = self.pi0_model.construct_event_hists(pi0_pts=pi0_points)
         self.total_event_charge = np.sum(charge_hist)
 
         bounds = [epi0_bound, theta1_bound, theta2_bound, phi1_bound, phi2_bound]
@@ -93,13 +94,17 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         nlc_inv_mass = NonlinearConstraint(self.invariant_mass_constraint, 130., 140.)
 
         energy_from_calo = self.pi0_model.calo_to_energy(charge=np.sum(charge_hist))
-        dir_norm = np.sum(dir_hist)
+        dir_norm = np.sum(tmp_dir_hist)
+        dir_hist = cp.asarray(tmp_dir_hist)
+
+        mutation_list = [0.55, 0.55, 0.55] if energy_from_calo < 500 else [0.55, 0.55]
 
         min_fval_list = []
         min_list = []
         print("Starting 2Shower Minimization!")
+        print("Mutation List:", mutation_list)
         #for n in range(3): # use tol=1e-5 and mutation=(0.1,0.35)
-        for n, mup in enumerate([0.55, 0.55, 0.55]):
+        for n, mup in enumerate(mutation_list):
             min_res2 = differential_evolution(self.model_interface,
                                               args=(charge_hist, dir_hist, energy_from_calo, dir_norm, two_shower),
                                               bounds=bounds, popsize=60, tol=1.e-5, mutation=(0.01, mup), x0=start_pt,

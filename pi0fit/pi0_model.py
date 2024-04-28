@@ -1,5 +1,6 @@
 import numpy as np
 import numba as nb
+import cupy as cp
 import pickle
 
 from pi0fit.shower_model import AnalyticShowerModel
@@ -277,7 +278,7 @@ class BinnedPi0Model:
         oa_nll = np.clip(oa_nll, a_max=np.inf, a_min=-5./oa_divisor)
         # oa_nll = np.where(oa_nll_shifted <= -2, np.exp((-oa_nll_shifted) / 2.)-3, oa_nll_shifted) / oa_divisor
 
-        charge_bins = self.charge_dict['bins']
+        #charge_bins = self.charge_dict['bins']
         direction_bins = self.direction_dict['bins']
 
 
@@ -306,12 +307,20 @@ class BinnedPi0Model:
                                                xyzpos_pro=None,
                                                bins=direction_bins, xyz_origin=(0, 90, 90), fill_value=0)
 
-        hcomp_dir_unnorm[hcomp_dir_unnorm == 0] = np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0])
+        hcomp_dir_unnorm[hcomp_dir_unnorm == 0] =  1.6981788794088674e-11 #np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0])
         hcomp_dir = hcomp_dir_unnorm / self.normalize_3d_hist(hist=hcomp_dir_unnorm, bins=direction_bins)
 
         ## Direction Likelihood
         # dir_norm = np.sum(hdir_charge) if two_shower else np.prod(hcomp_dir.shape)
-        charge_dir_nll = -np.sum(hdir_charge * np.log(hcomp_dir + 1.e-200)) / dir_norm
+        
+        #charge_dir_nll = -np.sum(hdir_charge * np.log(hcomp_dir + 1.e-200)) / dir_norm
+
+        ## GPU
+        hcomp_gpu = cp.asarray(hcomp_dir)
+        #hdir_gpu = cp.asarray(hdir_charge)
+        nll = -cp.sum(hdir_charge * cp.log(hcomp_gpu + 1e-200))
+        charge_dir_nll = cp.asnumpy(nll)
+        charge_dir_nll /= dir_norm
 
         ## Charge Likelihood
         # charge_nll = self.test_charge_model_nll(hevt_charge=hevt_charge, hcomp=hcomp_charge, hcomp_var=hcomp_var)
@@ -465,9 +474,11 @@ class BinnedPi0Model:
 
     def position_shower_pdf(self, hist, bins, xyz_pos, xyz_origin, fill_value=0):
 
-        hshift = np.ones_like(hist) * hist
+        #hshift = np.ones_like(hist) * hist
+        hshift = hist.copy()
 
         for i in range(len(bins)):
+            if i == 0: continue # skip the R axis
             num = self.shift_idx(bins=bins[i], shifted_pos=xyz_pos[i], shower_origin=xyz_origin[i])
             hshift = self.shift_array_3d(arr=hshift, num=num, axis=i, fill_value=fill_value)
 
