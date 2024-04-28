@@ -277,7 +277,7 @@ class BinnedPi0Model:
         oa_nll = np.clip(oa_nll, a_max=np.inf, a_min=-5./oa_divisor)
         # oa_nll = np.where(oa_nll_shifted <= -2, np.exp((-oa_nll_shifted) / 2.)-3, oa_nll_shifted) / oa_divisor
 
-        charge_bins = self.charge_dict['bins']
+        #charge_bins = self.charge_dict['bins']
         direction_bins = self.direction_dict['bins']
 
 
@@ -308,6 +308,7 @@ class BinnedPi0Model:
 
         hcomp_dir_unnorm[hcomp_dir_unnorm == 0] = np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0])
         hcomp_dir = hcomp_dir_unnorm / self.normalize_3d_hist(hist=hcomp_dir_unnorm, bins=direction_bins)
+        print("Min:", np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0]))
 
         ## Direction Likelihood
         # dir_norm = np.sum(hdir_charge) if two_shower else np.prod(hcomp_dir.shape)
@@ -465,9 +466,10 @@ class BinnedPi0Model:
 
     def position_shower_pdf(self, hist, bins, xyz_pos, xyz_origin, fill_value=0):
 
-        hshift = np.ones_like(hist) * hist
+        hshift = hist.copy()
 
         for i in range(len(bins)):
+            if i == 0: continue # skip the R axis
             num = self.shift_idx(bins=bins[i], shifted_pos=xyz_pos[i], shower_origin=xyz_origin[i])
             hshift = self.shift_array_3d(arr=hshift, num=num, axis=i, fill_value=fill_value)
 
