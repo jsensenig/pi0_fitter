@@ -17,15 +17,19 @@ def get_class(selected_class, base_class, config):
     return available_classes[selected_class](config)
 
 
-def spherical_dot(x1, x2):
+def spherical_dot(x1, x2, spherical=True):
     """
     Take the dot product of 2 vectors in spherical coordinates
     :param x1: array[N,3]
     :param x2: array[N,3]
     :return: array[N]
     """
-    xyz1 = spherical_to_cartesian(x1)#[0]
-    xyz2 = spherical_to_cartesian(x2)#[0]
+    if spherical:
+        xyz1 = spherical_to_cartesian(x1)#[0]
+        xyz2 = spherical_to_cartesian(x2)#[0]
+    else:
+        xyz1 = x1
+        xyz2 = x2
 
     norm1 = np.linalg.norm(xyz1, axis=1)
     norm1.reshape(norm1.size, 1)
@@ -110,6 +114,79 @@ def pi0_angles(epi0, cos_pi0, a):
     #     theta2 = np.sign(theta2) * ((abs(theta2) % np.pi) - np.pi)
 
     return alpha, theta1, theta2
+
+
+def mc_accept_reject_1d(x, pdf_func, N, **kwargs):
+    """
+    1D monte carlo sampler
+    :param x:
+    :param pdf_func:
+    :param N:
+    :param kwargs:
+    :return:
+    """
+    # Normalize the pdf to its mode/MPV
+    f = pdf_func(x, **kwargs)
+    f /= np.max(f)
+
+    # 1D uniform random numbers
+    xr = np.random.uniform(0, 1, N)
+
+    # Acceptance/Rejection mask
+    accept_reject_mask = xr < f
+
+    return x[accept_reject_mask]
+
+
+def mc_accept_reject_2d(xmesh, ymesh, pdf_func, N, **kwargs):
+    """
+    2D monte carlo sampler accepting x and y from np.meshgrid
+    :param xmesh:
+    :param ymesh:
+    :param pdf_func:
+    :param N:
+    :param kwargs:
+    :return:
+    """
+    # Normalize the pdf to its mode/MPV
+    f = pdf_func(xmesh, ymesh, **kwargs)
+    f /= np.max(f)
+
+    # 2D uniform random number mesh
+    Xr, _ = np.meshgrid(np.random.uniform(0, 1, N), np.random.uniform(0, 1, N))
+
+    # Acceptance/Rejection mask
+    accept_reject_mask = Xr < f
+
+    print("Accepted:", np.count_nonzero(accept_reject_mask))
+
+    return xmesh.T[accept_reject_mask], ymesh[accept_reject_mask]
+
+
+def mc_accept_reject_2d_nonmesh(x, y, pdf_func, N, **kwargs):
+    """
+    2D monte carlo sampler accepting independent x and y
+    :param x:
+    :param y:
+    :param pdf_func:
+    :param N:
+    :param kwargs:
+    :return:
+    """
+    # Normalize the pdf to its mode/MPV
+    f = pdf_func(x, y, **kwargs)
+    f /= np.max(f)
+
+    # 2D uniform random number
+    xr, yr = np.random.uniform(0, 1, N), np.random.uniform(0, 1, N)
+
+    # Acceptance/Rejection mask
+    accept_reject_mask = yr < f
+
+    print("Accepted:", np.count_nonzero(accept_reject_mask))
+    print(accept_reject_mask.shape)
+
+    return x[accept_reject_mask], y[accept_reject_mask]
 
 
 @dataclass

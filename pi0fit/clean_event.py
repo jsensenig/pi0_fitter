@@ -252,23 +252,13 @@ class CleanEvent:
         startz = event_record["cosmic_pfp_start_Z", evt][hit_mask].to_numpy() 
         endx = event_record["cosmic_pfp_end_X", evt][hit_mask].to_numpy() 
         endy = event_record["cosmic_pfp_end_Y", evt][hit_mask].to_numpy() 
-        endz = event_record["cosmic_pfp_end_Z", evt][hit_mask].to_numpy() 
-        is_beam = event_record["cosmic_pfp_IsBeam", evt][hit_mask].to_numpy()
+        endz = event_record["cosmic_pfp_end_Z", evt][hit_mask].to_numpy()
+
         is_primary = event_record["cosmic_pfp_IsPrimary", evt][hit_mask].to_numpy()
         clear_cosmic = event_record["cosmic_pfp_IsClearCosmic", evt][hit_mask].to_numpy()
         cosmic_id = event_record["cosmic_pfp_ID", evt][hit_mask].to_numpy()
-        
-        rstart = np.vstack((startx, starty, startz))
-        rend =  np.vstack((endx, endy, endz))
-        rdir = (rend - rstart)
-        
-     #   sph = futil.single_to_spherical(v=rdir).T[is_primary]
-     #   sph_cosmics = np.vstack((sph[:,0], np.degrees(sph[:,1]), np.degrees(sph[:,2]))).T
-     #   cut_mask = ~((sph_cosmics[:,1] < self.cosmic_tcut) & (sph_cosmics[:,0] < self.cosmic_rcut))
-        #xcenter, ycenter = 20, -135
-        #sp_dist = np.sqrt(((sph_cosmics[:, 1] - xcenter)*2)**2 + (sph_cosmics[:, 2] - ycenter)**2)
 
-        is_outside_list = []                                                                             
+        is_outside_list = []
         for sx, sy, sz, ex, ey, ez in zip(startx, starty, startz, endx, endy, endz):
             is_outside_list.append(self.is_outside_fiducial_box(xpoint=sx, ypoint=sy, zpoint=sz) or
                                    self.is_outside_fiducial_box(xpoint=ex, ypoint=ey, zpoint=ez))
@@ -284,7 +274,7 @@ class CleanEvent:
             cosmic_id_mask[mask] = True
         
         print("Cosmic Post (remaining):", np.count_nonzero(~cosmic_id_mask))
-                                                                                                                
+
         return cosmic_id_mask
 
     @staticmethod
@@ -338,7 +328,7 @@ class CleanEvent:
                   np.round(chi2_proton, 2), "/", np.round(dr, 2), " [", dpdg, "]")
             if not self.valid_daughter(theta=theta, phi=phi, chi2=chi2_proton): continue
             valid_nhit = (nhits > self.daughter_nhit_cut) and (nhits < 900)
-            valid_distance = dr < 7.#1.
+            valid_distance = dr < 7.
             valid_chi2 = chi2_proton < self.proton_chi2_cut
             loose_chi2 = chi2_proton < 200.
             #charged_daughter = (chi2_proton < 50.) and (chi2_proton != 1.0)

@@ -5,6 +5,7 @@ from pi0fit.pi0_transform import Pi0Transformations
 import pi0fit.fitter_utilities as futil
 from pi0fit.fitter_utilities import FitResults
 from pi0fit.pi0_likelihood_minimizer import Pi0MinimizerBase
+from pi0fit.clean_event import CleanEvent
 
 
 class Pi0Fitter:
@@ -16,6 +17,8 @@ class Pi0Fitter:
         self.debug = self.config["debug"]
 
         self.pi0_transform = Pi0Transformations(config=config)
+        self.clean_event = CleanEvent(config=config)
+
         self.truth_comparison = self.config["truth_comparison"]
         self.use_true_transform = self.config["use_true_point_transform"]
         self.lower_range, self.upper_range = self.config["fit_range"]
@@ -48,9 +51,9 @@ class Pi0Fitter:
 
             # Get 3D points for event
             if pi0_points is None:
-                # pi0_points = self.get_event_points(event_record=event_record)
-                pi0_points = self.get_event_points(event_record=event_record, event=evt, return_spherical=True,
-                                                   cosmics=False, get_gammas=False)
+                pi0_points = self.perform_cuts(event_record=event_record, event=evt)
+                if pi0_points is None:
+                    return None, None
 
             # Get event truth information
             truth_values = None
@@ -58,7 +61,10 @@ class Pi0Fitter:
                 truth_values = self.get_event_truth_values(event_record=event_record)
 
             # Minimize fit
-            self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
+            fit_res = self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
+
+            if fit_res is None:
+                return None, None
 
             #if self.return_pi0_only:
             #    return self.minimizer_obj.epi0, self.minimizer_obj.cos_pi0
@@ -69,6 +75,35 @@ class Pi0Fitter:
             return self.minimizer_obj.values_as_dict(), self.minimizer_obj.comparison_as_dict(fit_result=truth_values)
         else:
             return None, None
+
+    def perform_cuts(self, event_record, event):
+
+        xyz_vertex, dr = self.get_vertex(event_record=event_record, event=event)
+        print('Vertex xyz:', xyz_vertex)
+
+        if len(event_record["true_beam_Pi0_decay_startP", event]) != 2:
+            return None
+
+        cartesian_pts, cosmic_pts = self.get_event_points(event_record=event_record, event=event,
+                                                                return_spherical=False, cosmics=True, get_gammas=False)
+        spherical_pts = self.get_event_points(event_record=event_record, event=event, return_spherical=True,
+                                              cosmics=False, get_gammas=False)
+
+        valid_cosmic_mask = self.clean_event.dir_cosmic_selection(event_record=event_record, evt=event, hit_cut=200)
+
+        cleaned_spherical_pts = self.clean_event.clean_event(spherical_pts=spherical_pts, cartesian_pts=cartesian_pts,
+                                                        cosmic_pts=cosmic_pts[valid_cosmic_mask], xyz_vertex=xyz_vertex)
+        if cleaned_spherical_pts is None:
+            print("No points survived cuts!")
+            return None
+
+        no_proton_mask = self.clean_event.proton_cut(event_record=event_record, spherical_pts=cleaned_spherical_pts,
+                                                     event=event, xyz_shift=xyz_vertex)
+        if np.count_nonzero(no_proton_mask) < 5:
+            print("No points survived cuts!")
+            return None
+
+        return spherical_pts[no_proton_mask]
 
     def get_event_points(self, event_record, event, return_spherical, cosmics=False, get_gammas=True):
 

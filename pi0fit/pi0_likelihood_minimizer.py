@@ -99,6 +99,10 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
 
         mutation_list = [0.55, 0.55, 0.55] if energy_from_calo < 500 else [0.55, 0.55]
 
+        if np.sum(charge_hist) < 1 or np.sum(dir_hist) < 1 or energy_from_calo < 135.:
+            print("No Charge, skipping")
+            return None
+
         min_fval_list = []
         min_list = []
         print("Starting 2Shower Minimization!")
@@ -119,6 +123,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
 
         if truth_values is not None:
             self.show_results(minimizer=min_fit_res, pts=pi0_points, truth_values=truth_values)
+            return min_fit_res
         else:
             return min_fit_res
 
