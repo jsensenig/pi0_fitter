@@ -32,6 +32,9 @@ class CleanEvent:
         self.rcut_theta = self.config["rcut_theta"] # 175, 140
         self.rcut_radius_center = self.config["rcut_radius_center"]
         self.rcut_theta_center = self.config["rcut_theta_center"]
+        self.cosmic_radius = self.config["cosmic_radius"]
+        self.cosmic_rcut = self.config["cosmic_rcut"]
+        self.cosmic_tcut = self.config["cosmic_tcut"]
 
         self._cut_list = ["pre_cut", "radius_cut", "fiducial_cut", "cosmics_cut", "vertex_cut",
                          "beam_cut", "charge_cut", "proton_cut", "hist_cut"]
@@ -72,7 +75,7 @@ class CleanEvent:
                                                                     xyz_vertex=xyz_vertex)
         if self._cut_name == "fiducial_cut": self._cut_points = spherical_pts[pts_fiducial_mask]
 
-        radius_cut = self.radius_cut(pi0_pts=spherical_pts, simple_rcut=False)
+        radius_cut = self.radius_cut(pi0_pts=spherical_pts, simple_rcut=True)
         if self._cut_name == "radius_cut": self._cut_points = spherical_pts[pts_fiducial_mask & radius_cut]
 
         if len(spherical_pts[pts_fiducial_mask & radius_cut]) < 1: return None
@@ -105,19 +108,22 @@ class CleanEvent:
         if simple_rcut:
             return pi0_pts[:, 0] < self.rcut_high
 
-        radius, theta = self.rcut_radius, self.rcut_theta
-        radius_center, theta_center = self.rcut_radius_center, self.rcut_theta_center
+        cartesian = False
+        if cartesian:
+            angle = np.arctan2(pi0_pts[:, 0], pi0_pts[:, 2])
+            sp_dist = np.sqrt(pi0_pts[:, 0] * pi0_pts[:, 0] + pi0_pts[:, 2] * pi0_pts[:, 2])
+        else:
+            angle = np.arctan2(pi0_pts[:, 1], pi0_pts[:, 0])
+            sp_dist = np.sqrt(pi0_pts[:, 0] * pi0_pts[:, 0] + pi0_pts[:, 1] * pi0_pts[:, 1])
 
-        angle = np.arctan2(pi0_pts[:, 1], pi0_pts[:, 0])
-        sp_dist = np.sqrt(pi0_pts[:, 0] * pi0_pts[:, 0] + pi0_pts[:, 1] * pi0_pts[:, 1])
-
-        cut_dist = np.sqrt((radius * np.cos(angle)) ** 2 + (theta_center + theta * np.sin(angle)) ** 2)
+        cut_dist = np.sqrt((self.rcut_radius_center + self.rcut_radius * np.cos(angle)) ** 2 + \
+                           (self.rcut_theta_center + self.rcut_theta * np.sin(angle)) ** 2)
 
         return sp_dist < cut_dist
 
     def fiducial_cut(self, cartesian_pts, cosmic_pts, xyz_vertex):
 
-        cut = "very_new"
+        cut = "assym_x"
         if cut == "old":
             xdown, xup = (-300 - xyz_vertex[0]), (50 - xyz_vertex[0])
             zdown, zup = (0 - xyz_vertex[2] if xyz_vertex[2] < 100 else -100.), (150 + xyz_vertex[2])
@@ -128,9 +134,13 @@ class CleanEvent:
             zdown = (0. - xyz_vertex[2]) if xyz_vertex[2] < 100 else -100.
             zup = (distz + xyz_vertex[2])
         elif cut == "very_new":
-            xdown, xup = -150, 150
+            xdown, xup = -175., 175. #-150, 150
             zdown = (0. - xyz_vertex[2]) if xyz_vertex[2] < 100 else -100.
-            zup = 175
+            zup = 185. #175
+        elif cut == "assym_x":
+            xdown, xup = -170., 160. #-150, 150
+            zdown = (0. - xyz_vertex[2]) if xyz_vertex[2] < 100 else -100.
+            zup = 185. #175
 
         fiducial_cut_mask = ((cartesian_pts[:, 0] > xdown) & (cartesian_pts[:, 0] < xup) &
                              (cartesian_pts[:, 2] > zdown) & (cartesian_pts[:, 2] < zup))
@@ -178,37 +188,112 @@ class CleanEvent:
                (ypoint <= self.fiducial_ymin) | (ypoint >= self.fiducial_ymax) | \
                (zpoint <= self.fiducial_zmin) | (zpoint >= self.fiducial_zmax)
 
-    def cosmic_selection(self, event_record, evt, hit_cut=200):
+    @staticmethod
+    def inside_beam_spot(xstart, ystart, zstart):
+    
+        xdown, xup = -45, -15
+        ydown, yup = 410 , 435
+        zdown, zup = -10 , 10
+
+        return (xstart >= xdown) & (xstart <= xup) & (ystart >= ydown) & (ystart <= yup) & (zstart >= zdown) & (zstart <= zup) 
+
+    def cosmic_selection(self, event_record, evt, xyz_vertex, hit_cut=200):
 
         hit_mask = event_record["cosmic_pfp_nSpPts", evt] > hit_cut
 
-        startx = event_record["cosmic_pfp_start_X", evt][hit_mask]
-        starty = event_record["cosmic_pfp_start_Y", evt][hit_mask]
-        startz = event_record["cosmic_pfp_start_Z", evt][hit_mask]
-        endx = event_record["cosmic_pfp_end_X", evt][hit_mask]
-        endy = event_record["cosmic_pfp_end_Y", evt][hit_mask]
-        endz = event_record["cosmic_pfp_end_Z", evt][hit_mask]
+        startx = event_record["cosmic_pfp_start_X", evt][hit_mask] - xyz_vertex[0]
+        starty = event_record["cosmic_pfp_start_Y", evt][hit_mask] - xyz_vertex[1]
+        startz = event_record["cosmic_pfp_start_Z", evt][hit_mask] - xyz_vertex[2]
+        endx = event_record["cosmic_pfp_end_X", evt][hit_mask] - xyz_vertex[0]
+        endy = event_record["cosmic_pfp_end_Y", evt][hit_mask] - xyz_vertex[1]
+        endz = event_record["cosmic_pfp_end_Z", evt][hit_mask] - xyz_vertex[2]
+        is_primary = event_record["cosmic_pfp_IsPrimary", evt][hit_mask]
+        cosmic_id = event_record["cosmic_pfp_ID", evt][hit_mask]
 
-        is_outside_list = []
-        for sx, sy, sz, ex, ey, ez in zip(startx, starty, startz, endx, endy, endz):
-            is_outside_list.append(self.is_outside_fiducial_box(xpoint=sx, ypoint=sy, zpoint=sz) or
-                                   self.is_outside_fiducial_box(xpoint=ex, ypoint=ey, zpoint=ez))
+        #is_outside_list = []
+        #for sx, sy, sz, ex, ey, ez in zip(startx, starty, startz, endx, endy, endz):
+        #    is_outside_list.append(self.is_outside_fiducial_box(xpoint=sx, ypoint=sy, zpoint=sz) or
+        #                           self.is_outside_fiducial_box(xpoint=ex, ypoint=ey, zpoint=ez))
+
+        is_outside_list = []                                                                                                             
+        for sx, sy, sz, ex, ey, ez, primary in zip(startx, starty, startz, endx, endy, endz, is_primary):
+            if self.inside_beam_spot(xstart=sx+xyz_vertex[0], ystart=sy+xyz_vertex[1], zstart=sz+xyz_vertex[2]) or not primary: 
+                is_outside_list.append(False)
+                continue
+            xdown, xup = (-300 - xyz_vertex[0]), (50 - xyz_vertex[0])
+            ydown, yup = -200, 200
+            zdown, zup = (0 - xyz_vertex[2] if xyz_vertex[2] < 100 else -100.), (150 + xyz_vertex[2])
+            is_outside_list.append( (sx <= xdown) | (sx >= xup) | (sy <= ydown) | (sy >= yup) | (sz <= zdown) | (sz >= zup) | \
+                                    (ex <= xdown) | (ex >= xup) | (ey <= ydown) | (ey >= yup) | (ez <= zdown) | (ez >= zup) )
 
         cosmic_id_mask = ak.to_numpy(np.zeros_like(event_record["cosmic_pfp_spacePts_ID", evt], dtype=bool))
         print("Cosmic Pre", len(cosmic_id_mask))
 
-        for cid, beam, prim, cosmic, hcut, out in zip(event_record["cosmic_pfp_ID", evt],
-                                                      event_record["cosmic_pfp_IsBeam", evt],
-                                                      event_record["cosmic_pfp_IsPrimary", evt],
-                                                      event_record["cosmic_pfp_IsClearCosmic", evt], hit_mask,
-                                                      is_outside_list):
-            if not beam and ((hcut and out and prim) or (hcut and cosmic)):
+        #for cid, beam, prim, cosmic, hcut, out in zip(event_record["cosmic_pfp_ID", evt],
+        #                                              event_record["cosmic_pfp_IsBeam", evt],
+        #                                              event_record["cosmic_pfp_IsPrimary", evt],
+        #                                              event_record["cosmic_pfp_IsClearCosmic", evt], hit_mask,
+        #                                              is_outside_list):
+        #    if not beam and ((hcut and out and prim) or (hcut and cosmic)):
+        for is_out, cid in zip(is_outside_list, cosmic_id):
+             if is_out:
                 mask = event_record["cosmic_pfp_spacePts_ID", evt] == cid
                 cosmic_id_mask[mask] = True
-
+        
         print("Cosmic Post (remaining):", np.count_nonzero(~cosmic_id_mask))
 
         return cosmic_id_mask
+
+    def dir_cosmic_selection(self, event_record, evt, hit_cut=200):
+
+        hit_mask = event_record["cosmic_pfp_nSpPts", evt] > hit_cut
+        startx = event_record["cosmic_pfp_start_X", evt][hit_mask].to_numpy()
+        starty = event_record["cosmic_pfp_start_Y", evt][hit_mask].to_numpy() 
+        startz = event_record["cosmic_pfp_start_Z", evt][hit_mask].to_numpy() 
+        endx = event_record["cosmic_pfp_end_X", evt][hit_mask].to_numpy() 
+        endy = event_record["cosmic_pfp_end_Y", evt][hit_mask].to_numpy() 
+        endz = event_record["cosmic_pfp_end_Z", evt][hit_mask].to_numpy() 
+        is_beam = event_record["cosmic_pfp_IsBeam", evt][hit_mask].to_numpy()
+        is_primary = event_record["cosmic_pfp_IsPrimary", evt][hit_mask].to_numpy()
+        clear_cosmic = event_record["cosmic_pfp_IsClearCosmic", evt][hit_mask].to_numpy()
+        cosmic_id = event_record["cosmic_pfp_ID", evt][hit_mask].to_numpy()
+        
+        rstart = np.vstack((startx, starty, startz))
+        rend =  np.vstack((endx, endy, endz))
+        rdir = (rend - rstart)
+        
+     #   sph = futil.single_to_spherical(v=rdir).T[is_primary]
+     #   sph_cosmics = np.vstack((sph[:,0], np.degrees(sph[:,1]), np.degrees(sph[:,2]))).T
+     #   cut_mask = ~((sph_cosmics[:,1] < self.cosmic_tcut) & (sph_cosmics[:,0] < self.cosmic_rcut))
+        #xcenter, ycenter = 20, -135
+        #sp_dist = np.sqrt(((sph_cosmics[:, 1] - xcenter)*2)**2 + (sph_cosmics[:, 2] - ycenter)**2)
+
+        is_outside_list = []                                                                             
+        for sx, sy, sz, ex, ey, ez in zip(startx, starty, startz, endx, endy, endz):
+            is_outside_list.append(self.is_outside_fiducial_box(xpoint=sx, ypoint=sy, zpoint=sz) or
+                                   self.is_outside_fiducial_box(xpoint=ex, ypoint=ey, zpoint=ez))
+
+        is_outside_list = np.asarray(is_outside_list, dtype=bool)
+        cut_mask = (is_primary | clear_cosmic) & is_outside_list
+                                                                                                                               
+        cosmic_id_mask = ak.to_numpy(np.zeros_like(event_record["cosmic_pfp_spacePts_ID", evt], dtype=bool))           
+        print("Cosmic Pre", len(cosmic_id_mask))
+                                                                                                                
+        for cid in cosmic_id[cut_mask]:
+            mask = event_record["cosmic_pfp_spacePts_ID", evt] == cid
+            cosmic_id_mask[mask] = True
+        
+        print("Cosmic Post (remaining):", np.count_nonzero(~cosmic_id_mask))
+                                                                                                                
+        return cosmic_id_mask
+
+    @staticmethod
+    def valid_daughter(theta, phi, chi2):
+        valid_theta = (theta >= 0) & (theta <= 180)
+        valid_phi = (phi >= -180) & (phi <= 180)
+        valid_chi2 = chi2 >= 0
+
+        return valid_theta & valid_phi & valid_chi2
 
     def proton_cut(self, event_record, spherical_pts, event, xyz_shift):
 
@@ -233,12 +318,13 @@ class CleanEvent:
         shower_dict = {}
         for theta, phi, nhits, chi2_proton, dr in zip(daughter_theta, daughter_phi, daughter_nhit,
                                                       daughter_proton_chi2, dradius):
+            if not self.valid_daughter(theta=theta, phi=phi, chi2=chi2_proton): continue
             valid_nhit = nhits > self.daughter_nhit_cut
             valid_distance = (dr > self.daughter_rstart_cut) and (dr < 90.)
             very_valid_distance = (dr > 15) and (dr < 90.)
-            valid_chi2 = chi2_proton > self.proton_chi2_cut + 15
-            if (valid_nhit and valid_distance and valid_chi2) or (valid_distance and chi2_proton > 200) or \
-                (valid_nhit and very_valid_distance):
+            valid_chi2 = chi2_proton > self.proton_chi2_cut #+ 15
+            if (valid_nhit and valid_distance and valid_chi2): # or (valid_distance and chi2_proton > 200) or \
+                #(valid_nhit and very_valid_distance):
                 shower_dict[n] = np.array([[1., np.radians(theta), np.radians(phi)]])
             n += 1
         print("nShower-like Particles:", len(shower_dict), "Selected:", shower_dict.keys())
@@ -250,12 +336,13 @@ class CleanEvent:
             too_close_to_shower = False
             print(n, ")  theta/phi/nhit/Pchi2/dr", int(theta), "/", int(phi), "/", nhits, "/",
                   np.round(chi2_proton, 2), "/", np.round(dr, 2), " [", dpdg, "]")
+            if not self.valid_daughter(theta=theta, phi=phi, chi2=chi2_proton): continue
             valid_nhit = (nhits > self.daughter_nhit_cut) and (nhits < 900)
-            valid_distance = dr < 1.
-            valid_chi2 = (chi2_proton > -100) and (chi2_proton < self.proton_chi2_cut)
-            loose_chi2 = (chi2_proton > -100) and (chi2_proton < 200.)
+            valid_distance = dr < 7.#1.
+            valid_chi2 = chi2_proton < self.proton_chi2_cut
+            loose_chi2 = chi2_proton < 200.
             #charged_daughter = (chi2_proton < 50.) and (chi2_proton != 1.0)
-            if (valid_nhit and valid_chi2) or (loose_chi2 and valid_distance and valid_nhit):
+            if (valid_nhit and valid_chi2 and valid_distance):# or (loose_chi2 and valid_distance and valid_nhit):
                 proton_dir = np.array([[1., np.radians(theta), np.radians(phi)]])
                 for shower in shower_dict:
                     too_close_to_shower = futil.spherical_dot(proton_dir, shower_dict[shower]) > 0.9

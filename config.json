@@ -82,6 +82,9 @@
     "rcut_radius": 175,
     "rcut_theta": 140,
     "rcut_radius_center": 0,
-    "rcut_theta_center": 30
+    "rcut_theta_center": 30,
+    "cosmic_radius": 40,
+    "cosmic_rcut": 300,
+    "cosmic_tcut": 30
   }
 }
