@@ -1,3 +1,6 @@
+import pickle
+import sys
+
 from pi0fit.pi0_fit import Pi0Fitter
 from pi0fit.fitter_utilities import spherical_dot
 import awkward as ak
@@ -62,6 +65,8 @@ def calculate_open_angle(evt_record):
 
 if __name__ == '__main__':
 
+    run_name = sys.argv[1]
+
     with open("config.json", 'r') as f:
         config = json.load(f)
 
@@ -87,8 +92,13 @@ if __name__ == '__main__':
                                            (all_event_record["true_beam_endProcess"] == "pi+Inelastic") &
                                            (all_event_record["true_daughter_nPi0"] == 1))
 
-
     print("CeX/Total =", np.count_nonzero(all_event_record["true_cex"]), "/", len(all_event_record))
 
     print("nEvts:", len(all_event_record))
-    pf.fit_pi0(all_event_record=all_event_record[all_event_record["true_cex"]])
+    num_events, fit_results_list, truth_list = pf.fit_pi0(all_event_record=all_event_record[all_event_record["true_cex"]])
+
+    results_dict = {"number_events": num_events, "fit_results": fit_results_list, "truth_list": truth_list}
+    results_file = run_name + '.pickle'
+    print("Writing results to file:", results_file)
+    with open(results_file, 'wb') as f:
+        pickle.dump(results_dict, f)

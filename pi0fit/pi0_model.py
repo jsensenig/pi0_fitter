@@ -10,7 +10,7 @@ try:
     import cupy as cp
 except ImportError:
     has_gpu = False
-    print("No GPU found")
+    print("No GPU found, using CPU only!")
 
 
 class Pi0Model:
