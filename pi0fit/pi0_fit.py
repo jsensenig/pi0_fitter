@@ -35,7 +35,10 @@ class Pi0Fitter:
     def fit_pi0(self, all_event_record, pi0_points=None, loop_events=False):
 
         if pi0_points is None:
-            all_event_record = self.add_columns(event_record=all_event_record)
+            oa_list, cex_list, single_pi0_list = self.add_columns(event_record=all_event_record)
+            all_event_record["true_beam_Pi0_decay_OA"] = oa_list
+            all_event_record["true_cex"] = cex_list
+            all_event_record["true_single_pi0"] = single_pi0_list
 
         if self.transform_points:
             # Set the event pi0 start point
@@ -201,19 +204,18 @@ class Pi0Fitter:
             except:
                 oa_list.append(-1)
 
-        event_record["true_beam_Pi0_decay_OA"] = np.asarray(oa_list)
-        event_record["true_cex"] = ((event_record["true_beam_PDG"] == 211) &
+        cex_list = ((event_record["true_beam_PDG"] == 211) &
                                         (event_record["true_beam_endProcess"] == "pi+Inelastic") &
                                         (event_record["true_daughter_nPi0"] == 1) &
                                         (event_record["true_daughter_nPiPlus"] == 0) &
                                         (event_record["true_daughter_nPiMinus"] == 0) &
                                         (event_record["true_daughter_nProton"] > 0))
 
-        event_record["true_single_pi0"] = ((event_record["true_beam_PDG"] == 211) &
+        single_pi0_list = ((event_record["true_beam_PDG"] == 211) &
                                             (event_record["true_beam_endProcess"] == "pi+Inelastic") &
                                             (event_record["true_daughter_nPi0"] == 1))
 
-        return event_record
+        return np.asarray(oa_list), cex_list, single_pi0_list
 
     def get_event_truth_values(self, event_record, out_file=None):
 
