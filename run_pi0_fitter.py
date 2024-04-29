@@ -119,10 +119,26 @@ if __name__ == '__main__':
 
     print(json.dumps(config))
 
-    file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
-                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
-                 ]
+    #file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
+    #             "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
+    #             ]
 
-    # Dispatch threads
-    thread_creator(flist=file_list, config=config, results_file=results_file, num_workers=2)
+    file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana"]
+
+   # file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana",
+   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_11.root:pduneana/beamana",
+   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_12.root:pduneana/beamana",
+   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_13.root:pduneana/beamana",
+   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_14.root:pduneana/beamana",
+   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_15.root:pduneana/beamana",
+   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_16.root:pduneana/beamana",
+   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_17.root:pduneana/beamana"
+   #              ]
+
+
+    try:
+        # Dispatch threads
+        thread_creator(flist=file_list, config=config, results_file=results_file, num_workers=2)
+    except KeyboardInterrupt:
+        os._exit(1)
 

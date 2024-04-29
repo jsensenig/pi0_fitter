@@ -36,7 +36,6 @@ class Pi0Fitter:
 
         if pi0_points is None:
             all_event_record = self.add_columns(event_record=all_event_record)
-            all_event_record = all_event_record[all_event_record["true_cex"]]
 
         if self.transform_points:
             # Set the event pi0 start point
@@ -54,6 +53,8 @@ class Pi0Fitter:
         truth_list = []
         num_events = 0
         for evt in range(self.lower_range, self.upper_range):
+            if loop_events and not all_event_record["true_cex", evt]:
+                continue
             print("######## Event:", evt)
             num_events += 1
 
