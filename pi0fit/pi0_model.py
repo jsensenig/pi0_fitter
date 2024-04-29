@@ -1,11 +1,16 @@
 import numpy as np
 import numba as nb
-import cupy as cp
 import pickle
 
-from pi0fit.shower_model import AnalyticShowerModel
 from pi0fit.shower_model import ShowerModelBase, AnalyticShowerModel, BinnedShowerModel
 import pi0fit.fitter_utilities as futil
+
+has_gpu = True
+try:
+    import cupy as cp
+except ImportError:
+    has_gpu = False
+    print("No GPU found")
 
 
 class Pi0Model:
@@ -307,9 +312,8 @@ class BinnedPi0Model:
                                                xyzpos_pro=None,
                                                bins=direction_bins, xyz_origin=(0, 90, 90), fill_value=0)
 
-        hcomp_dir_unnorm[hcomp_dir_unnorm == 0] =  1.6981788794088674e-11 #np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0])
+        hcomp_dir_unnorm[hcomp_dir_unnorm == 0] = 1.6981788794088674e-11 #np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0])
         hcomp_dir = hcomp_dir_unnorm / self.normalize_3d_hist(hist=hcomp_dir_unnorm, bins=direction_bins)
-        print("Min:", np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0]))
 
         ## Direction Likelihood
         # dir_norm = np.sum(hdir_charge) if two_shower else np.prod(hcomp_dir.shape)
@@ -317,11 +321,13 @@ class BinnedPi0Model:
         #charge_dir_nll = -np.sum(hdir_charge * np.log(hcomp_dir + 1.e-200)) / dir_norm
 
         ## GPU
-        hcomp_gpu = cp.asarray(hcomp_dir)
-        #hdir_gpu = cp.asarray(hdir_charge)
-        nll = -cp.sum(hdir_charge * cp.log(hcomp_gpu + 1e-200))
-        charge_dir_nll = cp.asnumpy(nll)
-        charge_dir_nll /= dir_norm
+        if has_gpu:
+            hcomp_gpu = cp.asarray(hcomp_dir)
+            nll = -cp.sum(hdir_charge * cp.log(hcomp_gpu + 1e-200))
+            charge_dir_nll = cp.asnumpy(nll)
+            charge_dir_nll /= dir_norm
+        else:
+            charge_dir_nll = -np.sum(hdir_charge * np.log(hcomp_dir + 1e-200)) / dir_norm
 
         ## Charge Likelihood
         # charge_nll = self.test_charge_model_nll(hevt_charge=hevt_charge, hcomp=hcomp_charge, hcomp_var=hcomp_var)

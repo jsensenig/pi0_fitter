@@ -43,22 +43,26 @@ class Pi0Fitter:
                                                             rotate_polar_axis=self.rotate_polar_axis)
 
         if self.fit_all_events: self.upper_range = len(all_event_record)
-        fit_event = False
 
+        print("Fitting events:", self.lower_range, "-", self.upper_range)
+
+        fit_results_list = []
+        truth_list = []
+        num_events = 0
         for evt in range(self.lower_range, self.upper_range):
             print("######## Event:", evt)
-            event_record = all_event_record[evt]
+            num_events += 1
 
             # Get 3D points for event
             if pi0_points is None:
-                pi0_points = self.perform_cuts(event_record=event_record, event=evt)
+                pi0_points = self.perform_cuts(event_record=all_event_record, event=evt)
                 if pi0_points is None:
                     return None, None
 
             # Get event truth information
             truth_values = None
             if self.truth_comparison:
-                truth_values = self.get_event_truth_values(event_record=event_record)
+                truth_values = self.get_event_truth_values(event_record=all_event_record[evt])
 
             # Minimize fit
             fit_res = self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
@@ -66,15 +70,14 @@ class Pi0Fitter:
             if fit_res is None:
                 return None, None
 
-            #if self.return_pi0_only:
-            #    return self.minimizer_obj.epi0, self.minimizer_obj.cos_pi0
             print("Fit Result for event", evt)
             print(self.minimizer_obj.values_as_dict())
-            fit_event = True
-        if fit_event:
-            return self.minimizer_obj.values_as_dict(), self.minimizer_obj.comparison_as_dict(fit_result=truth_values)
-        else:
-            return None, None
+
+            fit_results_list.append([evt, self.minimizer_obj.values_as_array(),
+                                     list(self.minimizer_obj.comparison_as_dict(fit_result=truth_values).values())])
+            truth_list.append([evt, truth_values.values_as_array()])
+
+        return num_events, fit_results_list, truth_list
 
     def perform_cuts(self, event_record, event):
 
@@ -103,7 +106,7 @@ class Pi0Fitter:
             print("No points survived cuts!")
             return None
 
-        return spherical_pts[no_proton_mask]
+        return cleaned_spherical_pts[no_proton_mask]
 
     def get_event_points(self, event_record, event, return_spherical, cosmics=False, get_gammas=True):
 

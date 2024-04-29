@@ -34,8 +34,6 @@ def branches(has_cosmics):
 
     branch += ["reco_all_spacePts_X", "reco_all_spacePts_Y", "reco_all_spacePts_Z", "reco_all_spacePts_Integral"]
 
-    has_cosmics = True
-
     ## Cosmic Stuff
     if has_cosmics:
         branch += ["cosmic_pfp_spacePts_X", "cosmic_pfp_spacePts_Y", "cosmic_pfp_spacePts_Z", "cosmic_pfp_spacePts_ID"]
@@ -44,18 +42,6 @@ def branches(has_cosmics):
                    "cosmic_pfp_end_Y", "cosmic_pfp_end_Z", "cosmic_pfp_IsPrimary", "cosmic_pfp_IsClearCosmic",
                    "cosmic_pfp_IsBeam", "cosmic_pfp_ID", "cosmic_pfp_nSpPts"]
     return branch
-
-
-def add_true_conv_dist(evt_record):
-    conv_mask = evt_record["pi0_gamma_electron_process_initial"] == "conv"
-    min_dist_x = ak.min(
-        abs(evt_record["pi0_startx_initial"] - evt_record["pi0_gamma_electron_startx_initial"][conv_mask]), axis=2)
-    min_dist_y = ak.min(
-        abs(evt_record["pi0_starty_initial"] - evt_record["pi0_gamma_electron_starty_initial"][conv_mask]), axis=2)
-    min_dist_z = ak.min(
-        abs(evt_record["pi0_startz_initial"] - evt_record["pi0_gamma_electron_startz_initial"][conv_mask]), axis=2)
-
-    return np.sqrt(min_dist_x*min_dist_x + min_dist_y*min_dist_y + min_dist_z*min_dist_z)
 
 
 def calculate_open_angle(evt_record):
@@ -83,16 +69,12 @@ if __name__ == '__main__':
     pf = Pi0Fitter(config=config)
 
     # load events
-    #file_name = "/Users/jsen/tmp/tmp_pi0_shower/sample/single_pi0/single_pi0_uniform_0_2gev_n4550.root:trkUtil/points"
-    #file_name = "/home/hep/work/dune/pion_cex_ana/pi0_fitting/data/single_pi0_uniform_0_2gev_n4550.root:trkUtil/points"
+    file_name = "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana"
 
-    file_name = "/Users/jsen/tmp/tmp_pi0_shower/sample/single_pi0/single_pi0_updated_tree_uniform_0_2gev_n4550.root:trkUtil/points"
-
-
-    #raw_event_record = uproot.concatenate(files={file_name}, expressions=branches)
+    print("Loading events!")
     all_event_record = uproot.concatenate(files={file_name}, expressions=branches(has_cosmics=True))
+    print("Loaded", len(all_event_record), "events!")
 
-    all_event_record["true_decay_gamma_conv_dist"] = add_true_conv_dist(evt_record=all_event_record)
     all_event_record["true_beam_Pi0_decay_OA"] = calculate_open_angle(evt_record=all_event_record)
     all_event_record["true_cex"] = ((all_event_record["true_beam_PDG"] == 211) &
                                     (all_event_record["true_beam_endProcess"] == "pi+Inelastic") &
@@ -105,10 +87,8 @@ if __name__ == '__main__':
                                            (all_event_record["true_beam_endProcess"] == "pi+Inelastic") &
                                            (all_event_record["true_daughter_nPi0"] == 1))
 
-    # Only consider decays with 2 gammas
-    #two_gamma_decay_mask = np.count_nonzero(raw_event_record["pi0_gamma_process_initial"] == "Decay", axis=1) == 2
-    #all_event_record = raw_event_record[two_gamma_decay_mask]
 
+    print("CeX/Total =", np.count_nonzero(all_event_record["true_cex"]), "/", len(all_event_record))
 
     print("nEvts:", len(all_event_record))
-    pf.fit_pi0(all_event_record=all_event_record)
+    pf.fit_pi0(all_event_record=all_event_record[all_event_record["true_cex"]])

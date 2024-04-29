@@ -1,11 +1,16 @@
 from abc import abstractmethod
 import numpy as np
-import cupy as cp
 from scipy.optimize import NonlinearConstraint, dual_annealing, differential_evolution
 
 from pi0fit.pi0_model import Pi0Model, BinnedPi0Model
 from pi0fit.fitter_utilities import FitResults, spherical_dot
 
+has_gpu = True
+try:
+    import cupy as cp
+except ImportError:
+    has_gpu = False
+    print("No GPU found")
 
 class Pi0MinimizerBase(FitResults):
     """
@@ -95,7 +100,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
 
         energy_from_calo = self.pi0_model.calo_to_energy(charge=np.sum(charge_hist))
         dir_norm = np.sum(tmp_dir_hist)
-        dir_hist = cp.asarray(tmp_dir_hist)
+        dir_hist = cp.asarray(tmp_dir_hist) if has_gpu else tmp_dir_hist
 
         mutation_list = [0.55, 0.55, 0.55] if energy_from_calo < 500 else [0.55, 0.55]
 
