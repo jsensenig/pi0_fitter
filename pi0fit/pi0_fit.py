@@ -32,7 +32,10 @@ class Pi0Fitter:
                                              base_class=Pi0MinimizerBase,
                                              config=config)
 
-    def fit_pi0(self, all_event_record, pi0_points=None):
+    def fit_pi0(self, all_event_record, pi0_points=None, loop_events=False):
+
+        all_event_record = self.add_columns(event_record=all_event_record)
+        all_event_record = all_event_record[all_event_record["true_cex"]]
 
         if self.transform_points:
             # Set the event pi0 start point
@@ -54,10 +57,10 @@ class Pi0Fitter:
             num_events += 1
 
             # Get 3D points for event
-            if pi0_points is None:
+            if pi0_points is None or loop_events:
                 pi0_points = self.perform_cuts(event_record=all_event_record, event=evt)
                 if pi0_points is None:
-                    return None, None
+                    continue
 
             # Get event truth information
             truth_values = None
@@ -68,7 +71,7 @@ class Pi0Fitter:
             fit_res = self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
 
             if fit_res is None:
-                return None, None
+                continue
 
             print("Fit Result for event", evt)
             print(self.minimizer_obj.values_as_dict())
@@ -181,6 +184,34 @@ class Pi0Fitter:
 
         vertex = [xt, yt, zt] if self.use_true_vertex else [xr, yr, zr]
         return vertex, delta_r
+
+    @staticmethod
+    def add_columns(event_record):
+
+        oa_list = []
+        for event in range(len(event_record)):
+            try:
+                ss = np.vstack((ak.to_numpy(event_record["true_beam_Pi0_decay_startPx", event]),
+                                ak.to_numpy(event_record["true_beam_Pi0_decay_startPy", event]),
+                                ak.to_numpy(event_record["true_beam_Pi0_decay_startPz", event]))).T
+                oa = np.degrees(np.arccos(futil.spherical_dot(x1=np.array([ss[0]]), x2=np.array([ss[1]]), spherical=False)))[0]
+                oa_list.append(oa)
+            except:
+                oa_list.append(-1)
+
+        event_record["true_beam_Pi0_decay_OA"] = np.asarray(oa_list)
+        event_record["true_cex"] = ((event_record["true_beam_PDG"] == 211) &
+                                        (event_record["true_beam_endProcess"] == "pi+Inelastic") &
+                                        (event_record["true_daughter_nPi0"] == 1) &
+                                        (event_record["true_daughter_nPiPlus"] == 0) &
+                                        (event_record["true_daughter_nPiMinus"] == 0) &
+                                        (event_record["true_daughter_nProton"] > 0))
+
+        event_record["true_single_pi0"] = ((event_record["true_beam_PDG"] == 211) &
+                                            (event_record["true_beam_endProcess"] == "pi+Inelastic") &
+                                            (event_record["true_daughter_nPi0"] == 1))
+
+        return event_record
 
     def get_event_truth_values(self, event_record, out_file=None):
 

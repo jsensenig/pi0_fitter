@@ -1,12 +1,12 @@
 import pickle
 import sys
+import os
+import concurrent.futures
+import time
 
 from pi0fit.pi0_fit import Pi0Fitter
-from pi0fit.fitter_utilities import spherical_dot
-import awkward as ak
 import json
 import uproot
-import numpy as np
 
 
 def branches(has_cosmics):
@@ -47,20 +47,38 @@ def branches(has_cosmics):
     return branch
 
 
-def calculate_open_angle(evt_record):
+def check_thread_count(threads):
+    if threads > os.cpu_count():
+        print("Requested", threads, "threads but only", os.cpu_count(), "available!")
+        print("Setting number of threads to", os.cpu_count())
+        return os.cpu_count()
+    return threads
 
-    oa_list = []
-    for event in range(len(evt_record)):
-        try:
-            ss = np.vstack((ak.to_numpy(evt_record["true_beam_Pi0_decay_startPx", event]),
-                            ak.to_numpy(evt_record["true_beam_Pi0_decay_startPy", event]),
-                            ak.to_numpy(evt_record["true_beam_Pi0_decay_startPz", event]))).T
-            oa = np.degrees(np.arccos(spherical_dot(x1=np.array([ss[0]]), x2=np.array([ss[1]]), spherical=False)))[0]
-            oa_list.append(oa)
-        except:
-            oa_list.append(-1)
 
-    return np.asarray(oa_list)
+def fitter_wrapper(configuration, event_record):
+    fitter_instance = Pi0Fitter(config=configuration)
+    time.sleep(0.1)
+    return fitter_instance.fit_pi0(all_event_record=event_record, pi0_points=None, loop_events=True)
+
+
+def thread_creator(flist, config, num_workers):
+
+    branch = branches(has_cosmics=True)
+    threads = check_thread_count(threads=num_workers)
+
+    # Context manager handles joining of the threads
+    futures = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        # Use iterations of the tree read operation to batch the data for each thread
+        for i, array in enumerate(uproot.iterate(files=flist, expressions=branch, report=True, step_size='10000 MB',
+                                                 num_workers=threads)):
+            print("---------- Starting thread", i, "----------")
+            futures.append(executor.submit(fitter_wrapper, config, array[0]))
+            print(array[1])  # The report part of the array tuple from the tree iterator
+            time.sleep(0.2)
+
+        tuple_list = [future.result()[0] for future in concurrent.futures.as_completed(futures)]
+        print("Result Number Events:", tuple_list)
 
 
 if __name__ == '__main__':
@@ -71,34 +89,21 @@ if __name__ == '__main__':
         config = json.load(f)
 
     print(json.dumps(config))
-    pf = Pi0Fitter(config=config)
 
-    # load events
-    file_name = "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana"
+    file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
+                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana",
+                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_14.root:pduneana/beamana",
+                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_15.root:pduneana/beamana",
+                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_16.root:pduneana/beamana",
+                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_17.root:pduneana/beamana"
+                 ]
 
-    print("Loading events!")
-    all_event_record = uproot.concatenate(files={file_name}, expressions=branches(has_cosmics=True))
-    print("Loaded", len(all_event_record), "events!")
+    # Dispatch threads
+    thread_creator(flist=file_list, config=config, num_workers=3)
 
-    all_event_record["true_beam_Pi0_decay_OA"] = calculate_open_angle(evt_record=all_event_record)
-    all_event_record["true_cex"] = ((all_event_record["true_beam_PDG"] == 211) &
-                                    (all_event_record["true_beam_endProcess"] == "pi+Inelastic") &
-                                    (all_event_record["true_daughter_nPi0"] == 1) &
-                                    (all_event_record["true_daughter_nPiPlus"] == 0) &
-                                    (all_event_record["true_daughter_nPiMinus"] == 0) &
-                                    (all_event_record["true_daughter_nProton"] > 0))
 
-    all_event_record["true_single_pi0"] = ((all_event_record["true_beam_PDG"] == 211) &
-                                           (all_event_record["true_beam_endProcess"] == "pi+Inelastic") &
-                                           (all_event_record["true_daughter_nPi0"] == 1))
-
-    print("CeX/Total =", np.count_nonzero(all_event_record["true_cex"]), "/", len(all_event_record))
-
-    print("nEvts:", len(all_event_record))
-    num_events, fit_results_list, truth_list = pf.fit_pi0(all_event_record=all_event_record[all_event_record["true_cex"]])
-
-    results_dict = {"number_events": num_events, "fit_results": fit_results_list, "truth_list": truth_list}
-    results_file = run_name + '.pickle'
-    print("Writing results to file:", results_file)
-    with open(results_file, 'wb') as f:
-        pickle.dump(results_dict, f)
+    # results_dict = {"number_events": num_events, "fit_results": fit_results_list, "truth_list": truth_list}
+    # results_file = run_name + '.pickle'
+    # print("Writing results to file:", results_file)
+    # with open(results_file, 'wb') as f:
+    #     pickle.dump(results_dict, f)
