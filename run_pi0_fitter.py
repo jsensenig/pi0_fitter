@@ -3,6 +3,7 @@ import sys
 import os
 import concurrent.futures
 import time
+import numpy as np
 
 from pi0fit.pi0_fit import Pi0Fitter
 import json
@@ -61,7 +62,7 @@ def fitter_wrapper(configuration, event_record):
     return fitter_instance.fit_pi0(all_event_record=event_record, pi0_points=None, loop_events=True)
 
 
-def thread_creator(flist, config, num_workers):
+def thread_creator(flist, config, results_file, num_workers):
 
     branch = branches(has_cosmics=True)
     threads = check_thread_count(threads=num_workers)
@@ -77,13 +78,41 @@ def thread_creator(flist, config, num_workers):
             print(array[1])  # The report part of the array tuple from the tree iterator
             time.sleep(0.2)
 
-        tuple_list = [future.result()[0] for future in concurrent.futures.as_completed(futures)]
-        print("Result Number Events:", tuple_list)
+        save_results(thread_results=concurrent.futures.as_completed(futures), results_file=results_file)
+
+
+def save_results(thread_results, results_file):
+    # Wait for the threads to complete
+    results_list = [future.result() for future in thread_results]
+
+    thread_num_event_list = [thread[0] for thread in results_list]
+    thread_fit_results_list = [thread[1] for thread in results_list]
+    thread_truth_list = [thread[2] for thread in results_list]
+
+    print("Result Number Events:", thread_num_event_list)
+
+    eff_list = []
+    fit_list = []
+    comp_list = []
+    truth_list = []
+    for total_nevt, fit, truth in zip(thread_num_event_list, thread_fit_results_list, thread_truth_list):
+        for fvals, tvals in zip(fit, truth):
+            fit_list.append(fvals[1])
+            comp_list.append(fvals[2])
+            truth_list.append(tvals[1])
+        eff_list.append(len(fit) / total_nevt)
+
+    results_dict = {"efficiency": eff_list, "fit_results": fit_list, "truth_list": truth_list, "comparison": comp_list}
+
+    print("Writing results to file:", results_file)
+    with open(results_file, 'wb') as f:
+        pickle.dump(results_dict, f)
 
 
 if __name__ == '__main__':
 
     run_name = sys.argv[1]
+    results_file = run_name + '.pickle'
 
     with open("config.json", 'r') as f:
         config = json.load(f)
@@ -91,19 +120,9 @@ if __name__ == '__main__':
     print(json.dumps(config))
 
     file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
-                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana",
-                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_14.root:pduneana/beamana",
-                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_15.root:pduneana/beamana",
-                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_16.root:pduneana/beamana",
-                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_17.root:pduneana/beamana"
+                 "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
                  ]
 
     # Dispatch threads
-    thread_creator(flist=file_list, config=config, num_workers=3)
+    thread_creator(flist=file_list, config=config, results_file=results_file, num_workers=2)
 
-
-    # results_dict = {"number_events": num_events, "fit_results": fit_results_list, "truth_list": truth_list}
-    # results_file = run_name + '.pickle'
-    # print("Writing results to file:", results_file)
-    # with open(results_file, 'wb') as f:
-    #     pickle.dump(results_dict, f)

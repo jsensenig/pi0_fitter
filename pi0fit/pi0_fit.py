@@ -34,8 +34,9 @@ class Pi0Fitter:
 
     def fit_pi0(self, all_event_record, pi0_points=None, loop_events=False):
 
-        all_event_record = self.add_columns(event_record=all_event_record)
-        all_event_record = all_event_record[all_event_record["true_cex"]]
+        if pi0_points is None:
+            all_event_record = self.add_columns(event_record=all_event_record)
+            all_event_record = all_event_record[all_event_record["true_cex"]]
 
         if self.transform_points:
             # Set the event pi0 start point
@@ -76,9 +77,9 @@ class Pi0Fitter:
             print("Fit Result for event", evt)
             print(self.minimizer_obj.values_as_dict())
 
-            fit_results_list.append([evt, self.minimizer_obj.values_as_array(),
+            fit_results_list.append([evt, list(self.minimizer_obj.values_as_array()),
                                      list(self.minimizer_obj.comparison_as_dict(fit_result=truth_values).values())])
-            truth_list.append([evt, truth_values.values_as_array()])
+            truth_list.append([evt, list(truth_values.values_as_array())])
 
         return num_events, fit_results_list, truth_list
 
