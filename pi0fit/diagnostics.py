@@ -71,7 +71,7 @@ class Diagnostics:
         preclean_spherical_pts = self.pi0_fit.get_event_points(event_record=event_record, event=event,
                                                                return_spherical=True, cosmics=False, get_gammas=False)
 
-        valid_cosmic_mask = self.clean_event.cosmic_selection(event_record=event_record, evt=event, hit_cut=200)
+        valid_cosmic_mask = self.clean_event.dir_cosmic_selection(event_record=event_record, evt=event, hit_cut=200)
         cleaned_spherical_pts = self.clean_event.clean_event(spherical_pts=preclean_spherical_pts,
                                                                              cartesian_pts=cartesian_pts,
                                                                              cosmic_pts=cosmic_pts[valid_cosmic_mask],

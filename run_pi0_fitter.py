@@ -81,21 +81,17 @@ def thread_creator(flist, config, results_file, num_workers):
         save_results(thread_results=concurrent.futures.as_completed(futures), results_file=results_file)
 
 
-def save_results(thread_results, results_file):
-    # Wait for the threads to complete
-    results_list = [future.result() for future in thread_results]
+def save_results(thread_results, results_file, results_list=None):
 
-    thread_num_event_list = [thread[0] for thread in results_list]
-    thread_fit_results_list = [thread[1] for thread in results_list]
-    thread_truth_list = [thread[2] for thread in results_list]
-
-    print("Result Number Events:", thread_num_event_list)
+    if results_list is None:
+        # Wait for the threads to complete
+        results_list = [future.result() for future in thread_results]
 
     eff_list = []
     fit_list = []
     comp_list = []
     truth_list = []
-    for total_nevt, fit, truth in zip(thread_num_event_list, thread_fit_results_list, thread_truth_list):
+    for total_nevt, fit, truth in results_list:
         for fvals, tvals in zip(fit, truth):
             fit_list.append(fvals[1])
             comp_list.append(fvals[2])
@@ -111,6 +107,8 @@ def save_results(thread_results, results_file):
 
 if __name__ == '__main__':
 
+    use_threading = False
+
     run_name = sys.argv[1]
     results_file = run_name + '.pickle'
 
@@ -123,7 +121,8 @@ if __name__ == '__main__':
     #             "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
     #             ]
 
-    file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana"]
+    # file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana"]
+    file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_10.root:pduneana/beamana"]
 
    # file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana",
    #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_11.root:pduneana/beamana",
@@ -135,10 +134,14 @@ if __name__ == '__main__':
    #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_17.root:pduneana/beamana"
    #              ]
 
-
     try:
-        # Dispatch threads
-        thread_creator(flist=file_list, config=config, results_file=results_file, num_workers=2)
+        if use_threading:
+            # Dispatch threads
+            thread_creator(flist=file_list, config=config, results_file=results_file, num_workers=2)
+        else:
+            event_record = uproot.concatenate(files=file_list, expressions=branches(has_cosmics=True))
+            results = fitter_wrapper(configuration=config, event_record=event_record)
+            save_results(thread_results=None, results_file=results_file, results_list=[results])
     except KeyboardInterrupt:
         os._exit(1)
 
