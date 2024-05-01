@@ -219,6 +219,9 @@ class Pi0Fitter:
 
     def get_event_truth_values(self, event_record, out_file=None):
 
+        if len(event_record["true_beam_Pi0_decay_startP"]) != 2:
+            return FitResults(1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, True)
+
         e1, e2 = event_record["true_beam_Pi0_decay_startP"] * 1.e3
         c1, c2 = 0., 0. #event_record["true_decay_gamma_conv_dist"]
         oa = event_record["true_beam_Pi0_decay_OA"]
