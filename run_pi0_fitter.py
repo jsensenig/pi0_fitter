@@ -2,8 +2,9 @@ import pickle
 import sys
 import os
 import concurrent.futures
+from dask.distributed import Client
+from dask.distributed import as_completed
 import time
-import numpy as np
 
 from pi0fit.pi0_fit import Pi0Fitter
 import json
@@ -67,18 +68,19 @@ def thread_creator(flist, config, results_file, num_workers):
     branch = branches(has_cosmics=True)
     threads = check_thread_count(threads=num_workers)
 
+    client = Client(processes=False)
+
     # Context manager handles joining of the threads
     futures = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
-        # Use iterations of the tree read operation to batch the data for each thread
-        for i, array in enumerate(uproot.iterate(files=flist, expressions=branch, report=True, step_size='10000 MB',
-                                                 num_workers=threads)):
-            print("---------- Starting thread", i, "----------")
-            futures.append(executor.submit(fitter_wrapper, config, array[0]))
-            print(array[1])  # The report part of the array tuple from the tree iterator
-            time.sleep(0.2)
+    # Use iterations of the tree read operation to batch the data for each thread
+    for i, array in enumerate(uproot.iterate(files=flist, expressions=branch, report=True, step_size='10000 MB',
+                                             num_workers=threads)):
+        print("---------- Starting thread", i, "----------")
+        futures.append(client.submit(fitter_wrapper, config, array[0]))
+        print(array[1])  # The report part of the array tuple from the tree iterator
+        time.sleep(0.2)
 
-        save_results(thread_results=concurrent.futures.as_completed(futures), results_file=results_file)
+        save_results(thread_results=as_completed(futures), results_file=results_file)
 
 
 def save_results(thread_results, results_file, results_list=None):
@@ -107,7 +109,7 @@ def save_results(thread_results, results_file, results_list=None):
 
 if __name__ == '__main__':
 
-    use_threading = False
+    use_threading = True
 
     run_name = sys.argv[1]
     results_file = run_name + '.pickle'
@@ -117,12 +119,12 @@ if __name__ == '__main__':
 
     print(json.dumps(config))
 
-    #file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
-    #             "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
-    #             ]
+    file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
+                "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
+                ]
 
     # file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana"]
-    file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_10.root:pduneana/beamana"]
+    # file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_10.root:pduneana/beamana"]
 
    # file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana",
    #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_11.root:pduneana/beamana",
