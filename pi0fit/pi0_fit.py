@@ -15,6 +15,7 @@ class Pi0Fitter:
         self.config = config["pi0_fitter"]
         self.minimizer = self.config["minimizer"]
         self.debug = self.config["debug"]
+        self.is_mc = self.config["is_mc"]
 
         self.pi0_transform = Pi0Transformations(config=config)
         self.clean_event = CleanEvent(config=config)
@@ -31,10 +32,11 @@ class Pi0Fitter:
         self.minimizer_obj = futil.get_class(selected_class=self.minimizer,
                                              base_class=Pi0MinimizerBase,
                                              config=config)
+        self.minimizer_obj.is_mc = self.is_mc
 
     def fit_pi0(self, all_event_record, pi0_points=None, loop_events=False):
 
-        if pi0_points is None:
+        if pi0_points is None and self.is_mc:
             oa_list, cex_list, single_pi0_list = self.add_columns(event_record=all_event_record)
             all_event_record["true_beam_Pi0_decay_OA"] = oa_list
             all_event_record["true_cex"] = cex_list
@@ -56,8 +58,11 @@ class Pi0Fitter:
         truth_list = []
         num_events = 0
         for evt in range(self.lower_range, self.upper_range):
-            if loop_events and not all_event_record["true_cex", evt]:
-                continue
+            if self.is_mc:
+                if loop_events and not all_event_record["true_cex", evt]:
+                    fit_results_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
+                    truth_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
+                    continue
             print("######## Event:", evt)
             num_events += 1
 
@@ -65,53 +70,62 @@ class Pi0Fitter:
             if pi0_points is None or loop_events:
                 pi0_points = self.perform_cuts(event_record=all_event_record, event=evt)
                 if pi0_points is None:
+                    fit_results_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
+                    truth_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
                     continue
 
             # Get event truth information
             truth_values = None
-            if self.truth_comparison:
+            if self.truth_comparison and self.is_mc:
                 truth_values = self.get_event_truth_values(event_record=all_event_record[evt])
 
             # Minimize fit
             fit_res = self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
 
             if fit_res is None:
+                fit_results_list.append([evt, [-1]*len(self.minimizer_obj.values_as_array())])
+                truth_list.append([evt, [-1]*len(self.minimizer_obj.values_as_array())])
                 continue
 
             print("Fit Result for event", evt)
             print(self.minimizer_obj.values_as_dict())
 
-            fit_results_list.append([evt, list(self.minimizer_obj.values_as_array()),
-                                     list(self.minimizer_obj.comparison_as_dict(fit_result=truth_values).values())])
-            truth_list.append([evt, list(truth_values.values_as_array())])
+            if self.is_mc:
+                fit_results_list.append([evt, list(self.minimizer_obj.values_as_array()),
+                                         list(self.minimizer_obj.comparison_as_dict(fit_result=truth_values).values())])
+                truth_list.append([evt, list(truth_values.values_as_array())])
+            else:
+                fit_results_list.append([evt, list(self.minimizer_obj.values_as_array())])
+                truth_list.append([evt, [-1]*len(truth_values.values_as_array())])
 
         return num_events, fit_results_list, truth_list
 
     def perform_cuts(self, event_record, event):
 
-        xyz_vertex, dr = self.get_vertex(event_record=event_record, event=event)
+        xyz_vertex, _ = self.get_vertex(event_record=event_record, event=event)
         print('Vertex xyz:', xyz_vertex)
 
-        if len(event_record["true_beam_Pi0_decay_startP", event]) != 2:
-            return None
+        if self.is_mc:
+            if len(event_record["true_beam_Pi0_decay_startP", event]) != 2:
+                return None
 
         cartesian_pts, cosmic_pts = self.get_event_points(event_record=event_record, event=event,
-                                                                return_spherical=False, cosmics=True, get_gammas=False)
+                                                          return_spherical=False, cosmics=True, get_gammas=False)
         spherical_pts = self.get_event_points(event_record=event_record, event=event, return_spherical=True,
                                               cosmics=False, get_gammas=False)
 
         valid_cosmic_mask = self.clean_event.dir_cosmic_selection(event_record=event_record, evt=event, hit_cut=200)
 
         cleaned_spherical_pts = self.clean_event.clean_event(spherical_pts=spherical_pts, cartesian_pts=cartesian_pts,
-                                                        cosmic_pts=cosmic_pts[valid_cosmic_mask], xyz_vertex=xyz_vertex)
+                                                             cosmic_pts=cosmic_pts[valid_cosmic_mask], xyz_vertex=xyz_vertex)
         if cleaned_spherical_pts is None:
-            print("No points survived cuts!")
+            print("No points survived Cosmic and Fiducial cuts!")
             return None
 
         no_proton_mask = self.clean_event.proton_cut(event_record=event_record, spherical_pts=cleaned_spherical_pts,
                                                      event=event, xyz_shift=xyz_vertex)
         if np.count_nonzero(no_proton_mask) < 5:
-            print("No points survived cuts!")
+            print("No points survived Proton cuts!")
             return None
 
         return cleaned_spherical_pts[no_proton_mask]
@@ -129,7 +143,7 @@ class Pi0Fitter:
                                     ak.to_numpy(event_record["cosmic_pfp_spacePts_Y", event]) - pts_shift[1],
                                     ak.to_numpy(event_record["cosmic_pfp_spacePts_Z", event]) - pts_shift[2])).T
 
-        if get_gammas:
+        if get_gammas and self.is_mc:
             ssdir = np.vstack((ak.to_numpy(event_record["true_beam_Pi0_decay_startPx", event]),
                                ak.to_numpy(event_record["true_beam_Pi0_decay_startPy", event]),
                                ak.to_numpy(event_record["true_beam_Pi0_decay_startPz", event]))).T
@@ -151,39 +165,40 @@ class Pi0Fitter:
                 spherical_cosmic_pts = np.vstack((spherical_cosmic_pts_tmp[:, 0],
                                                   np.degrees(spherical_cosmic_pts_tmp[:, 1]),
                                                   np.degrees(spherical_cosmic_pts_tmp[:, 2]))).T
-                if get_gammas:
+                if get_gammas and self.is_mc:
                     return spherical_pts, spherical_sdir1, spherical_sdir2, spherical_cosmic_pts
                 else:
                     return spherical_pts, spherical_cosmic_pts
             else:
-                if get_gammas:
+                if get_gammas and self.is_mc:
                     return pts, sdir1, sdir2, cosmic_pts
                 else:
                     return pts, cosmic_pts
         else:
             if return_spherical:
-                if get_gammas:
+                if get_gammas and self.is_mc:
                     return spherical_pts, spherical_sdir1, spherical_sdir2
                 else:
                     return spherical_pts
             else:
-                if get_gammas:
+                if get_gammas and self.is_mc:
                     return pts, sdir1, sdir2
                 else:
                     return pts
 
     def get_vertex(self, event_record, event):
 
-        xt = event_record["true_beam_endX_SCE", event]
-        yt = event_record["true_beam_endY_SCE", event]
-        zt = event_record["true_beam_endZ_SCE", event]
+        if self.is_mc:
+            xt = event_record["true_beam_endX_SCE", event]
+            yt = event_record["true_beam_endY_SCE", event]
+            zt = event_record["true_beam_endZ_SCE", event]
 
         xr = event_record["reco_beam_endX", event]
         yr = event_record["reco_beam_endY", event]
         zr = event_record["reco_beam_endZ", event]
 
-        delta_r = np.sqrt((xt - xr) ** 2 + (yt - yr) ** 2 + (zt - zr) ** 2)
-        if self.debug: 
+        delta_r = np.sqrt((xt - xr) ** 2 + (yt - yr) ** 2 + (zt - zr) ** 2) if self.is_mc else 0.
+        if self.debug and self.is_mc:
             print("Δx/Δy/Δz/Δr", np.round(xt - xr, 3), "/",
                                  np.round(yt - yr, 3), "/",
                                  np.round(zt - zr, 3), "/", delta_r)

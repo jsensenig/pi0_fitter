@@ -2,6 +2,7 @@
   "pi0_fitter": {
     "minimizer": "DualAnnealingMinimizer",
     "debug": false,
+    "is_mc": true,
     "truth_comparison": true,
     "use_true_point_transform": false,
     "fit_range": [0,15],

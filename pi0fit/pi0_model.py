@@ -270,39 +270,24 @@ class BinnedPi0Model:
 
         return charge_hist, dir_hist
 
-    def pi0_model_nll(self, hevt_charge, hdir_charge, energy_from_calo, dir_norm, sigma_e, epi0, e1, e2, e3, a1, a2, a3, p1, p2, p3, c1, c2, c3, two_shower):
+    def pi0_model_nll(self, hdir_charge, energy_from_calo, dir_norm, sigma_e, epi0, a1, a2, p1, p2):
 
-        a1_rad, a2_rad, a3_rad = np.radians(a1), np.radians(a2), np.radians(a3)
-        p1_rad, p2_rad, p3_rad = np.radians(p1), np.radians(p2), np.radians(p3)
+        # Conversion distance isn't needed to get a good fit so set to 5cm
+        c1, c2 = 5, 5
+
+        a1_rad, a2_rad = np.radians(a1), np.radians(a2)
+        p1_rad, p2_rad = np.radians(p1), np.radians(p2)
 
         open_angle_cos_12 = futil.spherical_dot(np.array([[1, a1_rad, p1_rad]]), np.array([[1, a2_rad, p2_rad]]))
         oa_prob_12 = (np.nan_to_num(self.dn_dalpha_distribution(alpha=np.arccos(open_angle_cos_12),
-                                                                    epi0=epi0), nan=1.e-300, posinf=1.e-300))
+                                                                epi0=epi0), nan=1.e-300, posinf=1.e-300))
         oa_nll = -(np.log(oa_prob_12)) 
         oa_min = -1. # original -1
         oa_nll = np.clip(oa_nll, a_max=np.inf, a_min=oa_min)
 
-        #charge_bins = self.charge_dict['bins']
         direction_bins = self.direction_dict['bins']
 
-
-        ## 3D
-        # hcomp_charge = self.create_pi0_pdf(hist_lo=self.get_charge_hist(energy=e1),
-        #                                    hist_hi=self.get_charge_hist(energy=e2),
-        #                                    hist_pro=proton_charge_hist,
-        #                                    xyzpos_lo=(int(c1), int(a1), int(p1)),
-        #                                    xyzpos_hi=(int(c2), int(a2), int(p2)),
-        #                                    xyzpos_pro=proton_pos,
-        #                                    bins=charge_bins, xyz_origin=(0, 90, 90), fill_value=0)
-        #
-        # hcomp_var = self.create_pi0_variance_hist(hist_lo=self.get_variance_hist(energy=e1),
-        #                                           hist_hi=self.get_variance_hist(energy=e2),
-        #                                           hist_pro=proton_var_hist,
-        #                                           xyzpos_lo=(int(c1), int(a1), int(p1)),
-        #                                           xyzpos_hi=(int(c2), int(a2), int(p2)),
-        #                                           xyzpos_pro=proton_pos,
-        #                                           bins=charge_bins, xyz_origin=(0, 90, 90), fill_value=1)
-
+        ## Construct 3D direction pdf
         hcomp_dir_unnorm = self.create_pi0_pdf(hist_lo=self.get_direction_hist(),
                                                hist_hi=self.get_direction_hist(),
                                                hist_pro=None,
@@ -311,15 +296,11 @@ class BinnedPi0Model:
                                                xyzpos_pro=None,
                                                bins=direction_bins, xyz_origin=(0, 90, 90), fill_value=0)
 
+        # Minimum from single gamma pdfs minimum
         hcomp_dir_unnorm[hcomp_dir_unnorm == 0] = 1.6981788794088674e-11 #np.min(hcomp_dir_unnorm[hcomp_dir_unnorm > 0])
         hcomp_dir = hcomp_dir_unnorm / self.normalize_3d_hist(hist=hcomp_dir_unnorm, bins=direction_bins)
 
         ## Direction Likelihood
-        # dir_norm = np.sum(hdir_charge) if two_shower else np.prod(hcomp_dir.shape)
-        
-        #charge_dir_nll = -np.sum(hdir_charge * np.log(hcomp_dir + 1.e-200)) / dir_norm
-
-        ## GPU
         if has_gpu:
             hcomp_gpu = cp.asarray(hcomp_dir)
             nll = -cp.sum(hdir_charge * cp.log(hcomp_gpu + 1e-200))
@@ -329,11 +310,7 @@ class BinnedPi0Model:
             charge_dir_nll = -np.sum(hdir_charge * np.log(hcomp_dir + 1e-200)) / dir_norm
 
         ## Charge Likelihood
-        # charge_nll = self.test_charge_model_nll(hevt_charge=hevt_charge, hcomp=hcomp_charge, hcomp_var=hcomp_var)
         charge_nll = self.total_charge_model(epi0=epi0, energy_from_calo=energy_from_calo, sigma_e=sigma_e)
-
-        ## Conversion Likelihood
-        #conv_nll = (c1 / 100.) + (c2 / 100.)
 
         if self.debug:
             print("NLL Q/Dir/OA/C", charge_nll, "/", charge_dir_nll, "/", oa_nll)
@@ -565,23 +542,4 @@ class BinnedPi0Model:
             diff_angle = trans_point * np.exp(50. * (alpha - min_alpha))
 
         return diff_angle
-
-    # @staticmethod
-    # def dn_dalpha_distribution(alpha, epi0):
-    #     offset = 0.1
-    #     min_angle = 2. * np.arcsin(135. / epi0)
-    #     momentum = np.sqrt(epi0 ** 2 - 135. * 135.)
-    #     beta = (momentum / 135.) * np.sqrt(1 / (1 + (momentum / 135.) ** 2))
-    #     gamma = 1 / np.sqrt(1 - beta ** 2)
-    #
-    #     diff_angle = 2 * (1 / (4. * gamma * beta)) * (np.cos(alpha / 2.) / np.sin(alpha / 2.) ** 2) * (
-    #                 1 / np.sqrt(gamma ** 2 * np.sin(alpha / 2.) ** 2 - 1))
-    #
-    #     if alpha < (min_angle + np.radians(offset)):
-    #         min_alpha = min_angle + np.radians(offset)
-    #         trans_point = 2 * (1 / (4. * gamma * beta)) * (np.cos(min_alpha / 2.) / np.sin(min_alpha / 2.) ** 2) * (
-    #                     1 / np.sqrt(gamma ** 2 * np.sin(min_alpha / 2.) ** 2 - 1))
-    #         diff_angle = trans_point * np.exp(50.*(alpha - min_alpha))
-    #
-    #     return diff_angle
 

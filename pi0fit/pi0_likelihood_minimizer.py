@@ -1,6 +1,6 @@
 from abc import abstractmethod
 import numpy as np
-from scipy.optimize import NonlinearConstraint, dual_annealing, differential_evolution
+from scipy.optimize import NonlinearConstraint, differential_evolution
 
 from pi0fit.pi0_model import Pi0Model, BinnedPi0Model
 from pi0fit.fitter_utilities import FitResults, spherical_dot
@@ -11,6 +11,7 @@ try:
 except ImportError:
     has_gpu = False
 print("Using GPU:", has_gpu)
+
 
 class Pi0MinimizerBase(FitResults):
     """
@@ -23,6 +24,7 @@ class Pi0MinimizerBase(FitResults):
         self.debug = self.config["debug"]
         self.pi0_model = BinnedPi0Model(config)
         self.use_pi0_var = self.config["fit_pi0_var"]
+        self.is_mc = True
 
         try:
             self.out_file = self.config["result_file"]
@@ -73,8 +75,6 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         theta2_bound = tuple(self.config["theta2_limits"])
         phi1_bound = tuple(self.config["phi1_limits"])
         phi2_bound = tuple(self.config["phi2_limits"])
-        c1_bound = tuple(self.config["c1_limits"])   #(0, 80)
-        c2_bound = tuple(self.config["c2_limits"])   #(0, 80)
 
         bounds = [eg1_bound, eg2_bound, eg2_bound, theta1_bound, theta2_bound, theta2_bound, phi1_bound, phi2_bound, phi2_bound]
         start_pt = np.array([500, 800, 200, 30, 60, 110, 50, -20, 100])
@@ -92,21 +92,19 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         bounds = [epi0_bound, theta1_bound, theta2_bound, phi1_bound, phi2_bound]
         start_pt = np.asarray([800, 30, 60, 50, 40])
 
-        two_shower = True
-        nlc_energy_up = NonlinearConstraint(self.total_energy_constraint_up, 0.0, np.inf)
-        nlc_energy_down = NonlinearConstraint(self.total_energy_constraint_down, 0.0, np.inf)
         nlc_oa_min = NonlinearConstraint(self.open_angle_constraint, 0.01, np.inf)
-        nlc_inv_mass = NonlinearConstraint(self.invariant_mass_constraint, 130., 140.)
 
         energy_from_calo = self.pi0_model.calo_to_energy(charge=np.sum(charge_hist))
-        ##############
+
+        # Energy resolution fit
         #a,b,c = 11.05, 93.06, 0.82 # Fit down to 0 MeV
-        a,b,c =  0.737, 6.14, 7.14 # Fit down to 135 MeV
-        sigma_e =  a * np.sqrt((np.sum(charge_hist) / (b*b)) + c*c)
-       ##############
+        a,b,c = 0.737, 6.14, 7.14 # Fit down to 135 MeV
+        sigma_e = a * np.sqrt((np.sum(charge_hist) / (b*b)) + c*c)
+
         dir_norm = np.sum(tmp_dir_hist)
         dir_hist = cp.asarray(tmp_dir_hist) if has_gpu else tmp_dir_hist
 
+        # Low energy pi0 are harder to minimize so give it an extra iteration.
         mutation_list = [0.55, 0.55, 0.55] if energy_from_calo < 500 else [0.55, 0.55]
 
         if np.sum(charge_hist) < 1 or np.sum(dir_hist) < 1 or energy_from_calo < 137.:
@@ -115,15 +113,15 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
 
         min_fval_list = []
         min_list = []
-        print("Starting 2Shower Minimization!")
+        print("Starting Shower Minimization!")
         print("Mutation List:", mutation_list)
-        #for n in range(3): # use tol=1e-5 and mutation=(0.1,0.35)
+
         for n, mup in enumerate(mutation_list):
             min_res2 = differential_evolution(self.model_interface,
-                                              args=(charge_hist, dir_hist, energy_from_calo, dir_norm, sigma_e, two_shower),
+                                              args=(dir_hist, energy_from_calo, dir_norm, sigma_e),
                                               bounds=bounds, popsize=60, tol=1.e-5, mutation=(0.01, mup), x0=start_pt,
                                               constraints=[nlc_oa_min], maxiter=25000, workers=self.minimizer_workers)
-                                              #constraints = [nlc_oa_min, nlc_inv_mass, nlc_energy_down, nlc_energy_up],
+
             min_fval_list.append(min_res2.fun)
             min_list.append(min_res2)
             print("Iter:", n, "Mutation_upper:", mup, "Fmin1:", min_res2.fun)
@@ -131,16 +129,15 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         min_fit_res = min_list[np.argmin(min_fval_list)]
         print("Selected Min:", min_fit_res.fun)
 
-        if truth_values is not None:
-            self.show_results(minimizer=min_fit_res, pts=pi0_points, truth_values=truth_values)
-            return min_fit_res
-        else:
-            return min_fit_res
+        # Store results and compare with truth if MC
+        self.show_results(minimizer=min_fit_res, pts=pi0_points, truth_values=truth_values)
+
+        return min_fit_res
+
 
     @staticmethod
     def open_angle_constraint(x):
 
-        # e1, e2, a1, a2, p1, p2 = x
         epi0, a1, a2, p1, p2 = x
         a1_rad, a2_rad = np.radians(a1), np.radians(a2)
         p1_rad, p2_rad = np.radians(p1), np.radians(p2)
@@ -295,7 +292,6 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         print("Epi0 fit/calo:", epi0, "/", calo_epi0)
 
         tmp_e1, tmp_e2 = self.calculate_shower_energy(epi0=calo_epi0, open_angle=open_angle)
-        #tmp_e1, tmp_e2 = self.calculate_shower_energy(epi0=epi0, open_angle=open_angle)
         calc_energy1, calc_energy2 = (tmp_e1, tmp_e2) if qsum1 > qsum2 else (tmp_e2, tmp_e1)
 
         if print_stuff:
@@ -303,7 +299,6 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
             print("S2: E", int(calc_energy2), "MeV")
 
         return calo_epi0, calc_energy1, calc_energy2
-        #return epi0, calc_energy1, calc_energy2
 
     def show_results(self, minimizer, pts, truth_values):
         """
@@ -313,23 +308,27 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         :return:
         """
         shift = -1
-        true_dir1 = np.array([[1., np.radians(truth_values.theta1), np.radians(truth_values.phi1)]])
-        true_dir2 = np.array([[1., np.radians(truth_values.theta2), np.radians(truth_values.phi2)]])
+        has_truth = truth_values is not None
+
+        if self.is_mc and has_truth:
+            true_dir1 = np.array([[1., np.radians(truth_values.theta1), np.radians(truth_values.phi1)]])
+            true_dir2 = np.array([[1., np.radians(truth_values.theta2), np.radians(truth_values.phi2)]])
+
         reco_dir1 = np.array([[1., np.radians(minimizer.x[shift+2]), np.radians(minimizer.x[shift+4])]])
         reco_dir2 = np.array([[1., np.radians(minimizer.x[shift+3]), np.radians(minimizer.x[shift+5])]])
 
-        flipped = spherical_dot(reco_dir2, true_dir1) > spherical_dot(reco_dir1, true_dir1)
-        flipped &= spherical_dot(reco_dir1, true_dir2) > spherical_dot(reco_dir2, true_dir2)
+        flipped = True
+        if self.is_mc and has_truth:
+            flipped = spherical_dot(reco_dir2, true_dir1) > spherical_dot(reco_dir1, true_dir1)
+            flipped &= spherical_dot(reco_dir1, true_dir2) > spherical_dot(reco_dir2, true_dir2)
 
         open_angle = np.arccos(spherical_dot(reco_dir1, reco_dir2))[0]
 
-        # epi0 = minimizer.x[0]
-        # eg1, eg2 = self.calculate_shower_energy(epi0=epi0, open_angle=open_angle)
-        epi0, eg1, eg2 = self.energy_from_shower_direction(pts=pts, epi0=minimizer.x[0], open_angle=open_angle, theta1=minimizer.x[shift+2],
-                                                           theta2=minimizer.x[shift+3], phi1=minimizer.x[shift+4],
-                                                           phi2=minimizer.x[shift+5])
+        epi0, eg1, eg2 = self.energy_from_shower_direction(pts=pts, epi0=minimizer.x[0], open_angle=open_angle,
+                                                           theta1=minimizer.x[shift+2], theta2=minimizer.x[shift+3],
+                                                           phi1=minimizer.x[shift+4], phi2=minimizer.x[shift+5])
 
-        if flipped:
+        if flipped or not self.is_mc or not has_truth:
             self.set_event_values_shower(eg1=eg1, eg2=eg2, theta1=minimizer.x[shift+3],
                                          theta2=minimizer.x[shift+2], phi1=minimizer.x[shift+5], phi2=minimizer.x[shift+4],
                                          c1=5, c2=5, is_truth=False)
@@ -338,26 +337,19 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
                                          theta2=minimizer.x[shift+3], phi1=minimizer.x[shift+4], phi2=minimizer.x[shift+5],
                                          c1=5, c2=5, is_truth=False)
 
-        self.print_comparison_table(fit_result=truth_values)
-        self.calculate_metrics(fit_result=truth_values)
+        if self.is_mc and has_truth:
+            self.print_comparison_table(fit_result=truth_values)
+            self.calculate_metrics(fit_result=truth_values)
 
-    def model_interface(self, x, charge_hist, dir_hist, energy_from_calo, dir_norm, sigma_e, two_shower):
+    def model_interface(self, x, dir_hist, energy_from_calo, dir_norm, sigma_e):
 
         if self.debug:
-            print("x", x)
+            print("x = [", x, "]")
 
-        if two_shower:
-            epi0, a1, a2, p1, p2 = x
-            # e1, e2, a1, a2, p1, p2 = x
-            e1, e2 = 0., 0.
-            e3, a3, p3, c3 = 0., 0., 0., 0.
-        else:
-            e1, e2, e3, a1, a2, a3, p1, p2, p3 = x
+        epi0, a1, a2, p1, p2 = x
 
-        return self.pi0_model.pi0_model_nll(hevt_charge=charge_hist, hdir_charge=dir_hist,
-                                            energy_from_calo=energy_from_calo, dir_norm=dir_norm, sigma_e=sigma_e, epi0=epi0,
-                                            e1=e1, e2=e2, e3=e3, a1=a1, a2=a2, a3=a3, p1=p1, p2=p2, p3=p3,
-                                            c1=5, c2=5, c3=5, two_shower=two_shower)
+        return self.pi0_model.pi0_model_nll(hdir_charge=dir_hist, energy_from_calo=energy_from_calo, dir_norm=dir_norm,
+                                            sigma_e=sigma_e, epi0=epi0, a1=a1, a2=a2, p1=p1, p2=p2)
 
 class LikelihoodScan(Pi0MinimizerBase):
 
