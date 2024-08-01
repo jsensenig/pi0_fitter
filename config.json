@@ -6,10 +6,10 @@
     "truth_comparison": true,
     "use_true_point_transform": false,
     "fit_range": [0,15],
-    "fit_all_events": false,
+    "fit_all_events": true,
     "return_pi0_only": false,
     "rotate_polar_axis": false,
-    "transform_points": true,
+    "transform_points": false,
     "use_true_vertex": false
   },
   "pi0_minimizers": {
@@ -46,7 +46,6 @@
     "n_random_hist": 50,
     "charge_upper_range": 500,
     "variance_divisor": 2,
-    "sigma_e_factor": 1.0,
     "epi0_charge_model_divisor": 1,
     "charge_hist_file": "etc/mean_variance_hist_single_gamma_pdf_rotated_cdist_3d_wzero_50_1200.pkl",
     "direction_hist_file": "etc/hist_single_gamma_direction_pdf_rotated_cdist_3d.pkl"
@@ -75,7 +74,7 @@
      "proton_chi2_cut": 110,
      "daughter_nhit_cut": 30,
      "fiducial_xmin": -300,
-     "fiducial_xmax": -20,
+     "fiducial_xmax": -5,
      "fiducial_ymin": 200,
      "fiducial_ymax": 500,
      "fiducial_zmin": 20,
