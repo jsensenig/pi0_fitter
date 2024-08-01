@@ -80,7 +80,7 @@ def thread_creator(flist, config, results_file, num_workers):
         print(array[1])  # The report part of the array tuple from the tree iterator
         time.sleep(0.2)
 
-        save_results(thread_results=as_completed(futures), results_file=results_file)
+    save_results(thread_results=as_completed(futures), results_file=results_file)
 
 
 def save_results(thread_results, results_file, results_list=None):
@@ -109,9 +109,12 @@ def save_results(thread_results, results_file, results_list=None):
 
 if __name__ == '__main__':
 
-    use_threading = True
+    use_threading = False
 
-    run_name = sys.argv[1]
+    in_file_path = sys.argv[1]
+    in_file_list = in_file_path + "/pduneana*.root"
+
+    run_name = sys.argv[2]
     results_file = run_name + '.pickle'
 
     with open("config.json", 'r') as f:
@@ -119,29 +122,28 @@ if __name__ == '__main__':
 
     print(json.dumps(config))
 
-    file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
-                "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
-                ]
+    #file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_12.root:pduneana/beamana",
+    #            "/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_13.root:pduneana/beamana"
+    #            ]
 
     # file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana"]
     # file_list = ["/Users/jsen/work/Protodune/analysis/event_data/prod4a/new_set/1gev_files/pduneana_10.root:pduneana/beamana"]
 
-   # file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana",
-   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_11.root:pduneana/beamana",
-   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_12.root:pduneana/beamana",
-   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_13.root:pduneana/beamana",
-   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_14.root:pduneana/beamana",
-   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_15.root:pduneana/beamana",
-   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_16.root:pduneana/beamana",
-   #              "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_17.root:pduneana/beamana"
-   #              ]
+    #file_list = ["/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_10.root:pduneana/beamana",
+    #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_11.root:pduneana/beamana",
+    #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_12.root:pduneana/beamana",
+    #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_13.root:pduneana/beamana",
+    #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_14.root:pduneana/beamana",
+    #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_15.root:pduneana/beamana",
+    #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_16.root:pduneana/beamana",
+    #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_17.root:pduneana/beamana"
+    #             ]
 
     try:
         if use_threading:
-            # Dispatch threads
-            thread_creator(flist=file_list, config=config, results_file=results_file, num_workers=2)
+            thread_creator(flist=file_list, config=config, results_file=results_file, num_workers=8)
         else:
-            event_record = uproot.concatenate(files=file_list, expressions=branches(has_cosmics=True))
+            event_record = uproot.concatenate(files=in_file_list, expressions=branches(has_cosmics=True))
             results = fitter_wrapper(configuration=config, event_record=event_record)
             save_results(thread_results=None, results_file=results_file, results_list=[results])
     except KeyboardInterrupt:
