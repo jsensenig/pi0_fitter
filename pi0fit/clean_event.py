@@ -40,6 +40,8 @@ class CleanEvent:
                          "beam_cut", "charge_cut", "proton_cut", "hist_cut"]
         self._cut_points = None
         self._cut_name = None
+ 
+        self.debug = False 
 
     @property
     def cut_list(self):
@@ -311,24 +313,23 @@ class CleanEvent:
             if not self.valid_daughter(theta=theta, phi=phi, chi2=chi2_proton): continue
             valid_nhit = nhits > self.daughter_nhit_cut
             valid_distance = (dr > self.daughter_rstart_cut) and (dr < 90.)
-            very_valid_distance = (dr > 15) and (dr < 90.)
             valid_chi2 = chi2_proton > self.proton_chi2_cut #+ 15
             if (valid_nhit and valid_distance and valid_chi2): # or (valid_distance and chi2_proton > 200) or \
-                #(valid_nhit and very_valid_distance):
                 shower_dict[n] = np.array([[1., np.radians(theta), np.radians(phi)]])
             n += 1
-        print("nShower-like Particles:", len(shower_dict), "Selected:", shower_dict.keys())
+        if self.debug: print("nShower-like Particles:", len(shower_dict), "Selected:", shower_dict.keys())
 
         n = 0
         removed_protons = []
         for theta, phi, nhits, chi2_proton, dr, dpdg in zip(daughter_theta, daughter_phi, daughter_nhit,
                                                             daughter_proton_chi2, dradius, daughter_pdg):
             too_close_to_shower = False
-            print(n, ")  theta/phi/nhit/Pchi2/dr", int(theta), "/", int(phi), "/", nhits, "/",
-                  np.round(chi2_proton, 2), "/", np.round(dr, 2), " [", dpdg, "]")
+            if self.debug: 
+                print(n, ")  theta/phi/nhit/Pchi2/dr", int(theta), "/", int(phi), "/", nhits, "/",
+                      np.round(chi2_proton, 2), "/", np.round(dr, 2), " [", dpdg, "]")
             if not self.valid_daughter(theta=theta, phi=phi, chi2=chi2_proton): continue
             valid_nhit = (nhits > self.daughter_nhit_cut) and (nhits < 900)
-            valid_distance = dr < 7.
+            valid_distance = dr < self.daughter_rstart_cut #10.
             valid_chi2 = chi2_proton < self.proton_chi2_cut
             loose_chi2 = chi2_proton < 200.
             #charged_daughter = (chi2_proton < 50.) and (chi2_proton != 1.0)
@@ -345,6 +346,6 @@ class CleanEvent:
                 proton_remove_mask &= ~(proton_point_cos > 0.85)
                 removed_protons.append(n)
             n += 1
-        print("Removed Protons:", removed_protons)
+        if self.debug: print("Removed Protons:", removed_protons)
 
         return proton_remove_mask
