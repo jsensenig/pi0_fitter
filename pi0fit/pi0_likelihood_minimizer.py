@@ -99,13 +99,18 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         nlc_inv_mass = NonlinearConstraint(self.invariant_mass_constraint, 130., 140.)
 
         energy_from_calo = self.pi0_model.calo_to_energy(charge=np.sum(charge_hist))
+        ##############
+        #a,b,c = 11.05, 93.06, 0.82 # Fit down to 0 MeV
+        a,b,c =  0.737, 6.14, 7.14 # Fit down to 135 MeV
+        sigma_e =  a * np.sqrt((np.sum(charge_hist) / (b*b)) + c*c)
+       ##############
         dir_norm = np.sum(tmp_dir_hist)
         dir_hist = cp.asarray(tmp_dir_hist) if has_gpu else tmp_dir_hist
 
         mutation_list = [0.55, 0.55, 0.55] if energy_from_calo < 500 else [0.55, 0.55]
 
-        if np.sum(charge_hist) < 1 or np.sum(dir_hist) < 1 or energy_from_calo < 135.:
-            print("No Charge, skipping")
+        if np.sum(charge_hist) < 1 or np.sum(dir_hist) < 1 or energy_from_calo < 137.:
+            print("No/Low Charge, skipping")
             return None
 
         min_fval_list = []
@@ -115,7 +120,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         #for n in range(3): # use tol=1e-5 and mutation=(0.1,0.35)
         for n, mup in enumerate(mutation_list):
             min_res2 = differential_evolution(self.model_interface,
-                                              args=(charge_hist, dir_hist, energy_from_calo, dir_norm, two_shower),
+                                              args=(charge_hist, dir_hist, energy_from_calo, dir_norm, sigma_e, two_shower),
                                               bounds=bounds, popsize=60, tol=1.e-5, mutation=(0.01, mup), x0=start_pt,
                                               constraints=[nlc_oa_min], maxiter=25000, workers=self.minimizer_workers)
                                               #constraints = [nlc_oa_min, nlc_inv_mass, nlc_energy_down, nlc_energy_up],
@@ -336,7 +341,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
         self.print_comparison_table(fit_result=truth_values)
         self.calculate_metrics(fit_result=truth_values)
 
-    def model_interface(self, x, charge_hist, dir_hist, energy_from_calo, dir_norm, two_shower):
+    def model_interface(self, x, charge_hist, dir_hist, energy_from_calo, dir_norm, sigma_e, two_shower):
 
         if self.debug:
             print("x", x)
@@ -350,7 +355,7 @@ class DualAnnealingMinimizer(Pi0MinimizerBase):
             e1, e2, e3, a1, a2, a3, p1, p2, p3 = x
 
         return self.pi0_model.pi0_model_nll(hevt_charge=charge_hist, hdir_charge=dir_hist,
-                                            energy_from_calo=energy_from_calo, dir_norm=dir_norm, epi0=epi0,
+                                            energy_from_calo=energy_from_calo, dir_norm=dir_norm, sigma_e=sigma_e, epi0=epi0,
                                             e1=e1, e2=e2, e3=e3, a1=a1, a2=a2, a3=a3, p1=p1, p2=p2, p3=p3,
                                             c1=5, c2=5, c3=5, two_shower=two_shower)
 

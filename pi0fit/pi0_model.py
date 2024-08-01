@@ -253,7 +253,7 @@ class BinnedPi0Model:
                                                                          Y=pi0_pts[:, 1], Z=pi0_pts[:, 2],
                                                                          Q=pi0_pts[:, 3], bins=bins,
                                                                          dist_lower_cut=15, dist_upper_cut=80,
-                                                                         charge_cut=80)
+                                                                         charge_cut=80) # use 80
 
         print("Qhist", np.sum(charge_hist), "Calo Energy", self.calo_to_energy(charge=np.sum(charge_hist)))
 
@@ -264,24 +264,23 @@ class BinnedPi0Model:
         dir_hist = dir_hist_tmp if return_precut else self.distance_cut_2d(hist=dir_hist_tmp, X=pi0_pts[:, 0],
                                                                            Y=pi0_pts[:, 1], Z=pi0_pts[:, 2],
                                                                            Q=pi0_pts[:, 3], bins=bins, dist_lower_cut=15,
-                                                                           dist_upper_cut=80, charge_cut=25)
+                                                                           dist_upper_cut=80, charge_cut=20) # use 20
 
         print("Charge Bins", charge_hist.shape, " Dir Bins", dir_hist.shape)
 
         return charge_hist, dir_hist
 
-    def pi0_model_nll(self, hevt_charge, hdir_charge, energy_from_calo, dir_norm, epi0, e1, e2, e3, a1, a2, a3, p1, p2, p3, c1, c2, c3, two_shower):
+    def pi0_model_nll(self, hevt_charge, hdir_charge, energy_from_calo, dir_norm, sigma_e, epi0, e1, e2, e3, a1, a2, a3, p1, p2, p3, c1, c2, c3, two_shower):
 
         a1_rad, a2_rad, a3_rad = np.radians(a1), np.radians(a2), np.radians(a3)
         p1_rad, p2_rad, p3_rad = np.radians(p1), np.radians(p2), np.radians(p3)
 
         open_angle_cos_12 = futil.spherical_dot(np.array([[1, a1_rad, p1_rad]]), np.array([[1, a2_rad, p2_rad]]))
-        oa_divisor = 5.  # 75#40
-        oa_prob_12 = (np.nan_to_num(self.dn_dalpha_distribution_mod(alpha=np.arccos(open_angle_cos_12),
+        oa_prob_12 = (np.nan_to_num(self.dn_dalpha_distribution(alpha=np.arccos(open_angle_cos_12),
                                                                     epi0=epi0), nan=1.e-300, posinf=1.e-300))
-        oa_nll = -(np.log(oa_prob_12)) #/ oa_divisor)
-        oa_nll = np.clip(oa_nll, a_max=np.inf, a_min=-5./oa_divisor)
-        # oa_nll = np.where(oa_nll_shifted <= -2, np.exp((-oa_nll_shifted) / 2.)-3, oa_nll_shifted) / oa_divisor
+        oa_nll = -(np.log(oa_prob_12)) 
+        oa_min = -1. # original -1
+        oa_nll = np.clip(oa_nll, a_max=np.inf, a_min=oa_min)
 
         #charge_bins = self.charge_dict['bins']
         direction_bins = self.direction_dict['bins']
@@ -331,7 +330,7 @@ class BinnedPi0Model:
 
         ## Charge Likelihood
         # charge_nll = self.test_charge_model_nll(hevt_charge=hevt_charge, hcomp=hcomp_charge, hcomp_var=hcomp_var)
-        charge_nll = self.total_charge_model(epi0=epi0, energy_from_calo=energy_from_calo)
+        charge_nll = self.total_charge_model(epi0=epi0, energy_from_calo=energy_from_calo, sigma_e=sigma_e)
 
         ## Conversion Likelihood
         #conv_nll = (c1 / 100.) + (c2 / 100.)
@@ -385,8 +384,10 @@ class BinnedPi0Model:
         charge_norm = 150. * len(mean_dist) #hcomp[mask].shape[0]
         return (np.sum((0.5 * mean_dist * mean_dist)[mask]) + np.sum(norm[mask])) / charge_norm
 
-    def total_charge_model(self, epi0, energy_from_calo):
-        sigma_e = self.sigma_e_factor * np.sqrt(energy_from_calo)
+    def total_charge_model(self, epi0, energy_from_calo, sigma_e):
+       # sigma_e = self.sigma_e_factor * energy_from_calo #np.sqrt(energy_from_calo)
+        #a,b,c = 11.05, 93.06, 0.82
+        #sigma_e =  a * np.sqrt((x / (b*b)) + c*c)
         pdf_norm = np.log(np.sqrt(2. * np.pi) * sigma_e)
         charge_nll = pdf_norm + (((epi0 - energy_from_calo) * (epi0 - energy_from_calo)) / (2. * sigma_e * sigma_e))
         return charge_nll / self.epi0_charge_model_divisor

@@ -183,9 +183,10 @@ class Pi0Fitter:
         zr = event_record["reco_beam_endZ", event]
 
         delta_r = np.sqrt((xt - xr) ** 2 + (yt - yr) ** 2 + (zt - zr) ** 2)
-        print("Δx/Δy/Δz/Δr", np.round(xt - xr, 3), "/",
-                             np.round(yt - yr, 3), "/",
-                             np.round(zt - zr, 3), "/", delta_r)
+        if self.debug: 
+            print("Δx/Δy/Δz/Δr", np.round(xt - xr, 3), "/",
+                                 np.round(yt - yr, 3), "/",
+                                 np.round(zt - zr, 3), "/", delta_r)
 
         vertex = [xt, yt, zt] if self.use_true_vertex else [xr, yr, zr]
         return vertex, delta_r
