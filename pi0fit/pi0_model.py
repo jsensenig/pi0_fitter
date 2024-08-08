@@ -209,7 +209,6 @@ class BinnedPi0Model:
         self.charge_hist_file = self.config["charge_hist_file"]
         self.direction_hist_file = self.config["direction_hist_file"]
         self.charge_upper_range = self.config["charge_upper_range"]
-        self.sigma_e_factor = self.config["sigma_e_factor"]
         self.epi0_charge_model_divisor = self.config["epi0_charge_model_divisor"]
 
         self.charge_dict, self.direction_dict, self.random_hist = self.load_histograms()
@@ -362,7 +361,6 @@ class BinnedPi0Model:
         return (np.sum((0.5 * mean_dist * mean_dist)[mask]) + np.sum(norm[mask])) / charge_norm
 
     def total_charge_model(self, epi0, energy_from_calo, sigma_e):
-       # sigma_e = self.sigma_e_factor * energy_from_calo #np.sqrt(energy_from_calo)
         #a,b,c = 11.05, 93.06, 0.82
         #sigma_e =  a * np.sqrt((x / (b*b)) + c*c)
         pdf_norm = np.log(np.sqrt(2. * np.pi) * sigma_e)
