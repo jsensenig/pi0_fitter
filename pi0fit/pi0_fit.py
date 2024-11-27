@@ -58,10 +58,10 @@ class Pi0Fitter:
         truth_list = []
         num_events = 0
         for evt in range(self.lower_range, self.upper_range):
-            if self.is_mc:
+            if False and self.is_mc:
                 if loop_events and not all_event_record["true_cex", evt]:
-                    fit_results_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
-                    truth_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
+                    fit_results_list.append([evt, [-999] * 11 + [False]])
+                    truth_list.append([evt, [-999] * 11 + [False]])
                     continue
             print("######## Event:", evt)
             num_events += 1
@@ -70,8 +70,8 @@ class Pi0Fitter:
             if pi0_points is None or loop_events:
                 pi0_points = self.perform_cuts(event_record=all_event_record, event=evt)
                 if pi0_points is None:
-                    fit_results_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
-                    truth_list.append([evt, [-1] * len(self.minimizer_obj.values_as_array())])
+                    fit_results_list.append([evt, [-999] * 11 + [False]])
+                    truth_list.append([evt, [-999] * 11 + [False]])
                     continue
 
             # Get event truth information
@@ -83,8 +83,8 @@ class Pi0Fitter:
             fit_res = self.minimizer_obj.minimize(pi0_points=pi0_points, truth_values=truth_values)
 
             if fit_res is None:
-                fit_results_list.append([evt, [-1]*len(self.minimizer_obj.values_as_array())])
-                truth_list.append([evt, [-1]*len(self.minimizer_obj.values_as_array())])
+                fit_results_list.append([evt, [-999] * 11 + [False]])
+                truth_list.append([evt, [-999] * 11 + [False]])
                 continue
 
             print("Fit Result for event", evt)
@@ -96,7 +96,7 @@ class Pi0Fitter:
                 truth_list.append([evt, list(truth_values.values_as_array())])
             else:
                 fit_results_list.append([evt, list(self.minimizer_obj.values_as_array())])
-                truth_list.append([evt, [-1]*len(truth_values.values_as_array())])
+                truth_list.append([evt, [-999] * 11 + [False]])
 
         return num_events, fit_results_list, truth_list
 
@@ -105,9 +105,9 @@ class Pi0Fitter:
         xyz_vertex, _ = self.get_vertex(event_record=event_record, event=event)
         print('Vertex xyz:', xyz_vertex)
 
-        if self.is_mc:
-            if len(event_record["true_beam_Pi0_decay_startP", event]) != 2:
-                return None
+        #if self.is_mc:
+        #    if len(event_record["true_beam_Pi0_decay_startP", event]) != 2:
+        #        return None
 
         cartesian_pts, cosmic_pts = self.get_event_points(event_record=event_record, event=event,
                                                           return_spherical=False, cosmics=True, get_gammas=False)
@@ -218,7 +218,7 @@ class Pi0Fitter:
                 oa = np.degrees(np.arccos(futil.spherical_dot(x1=np.array([ss[0]]), x2=np.array([ss[1]]), spherical=False)))[0]
                 oa_list.append(oa)
             except:
-                oa_list.append(-1)
+                oa_list.append(-999)
 
         cex_list = ((event_record["true_beam_PDG"] == 211) &
                                         (event_record["true_beam_endProcess"] == "pi+Inelastic") &
