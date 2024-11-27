@@ -8,6 +8,7 @@ import time
 from pi0fit.pi0_fit import Pi0Fitter
 import json
 import uproot
+import numpy as np
 
 
 def branches(has_cosmics, is_mc):
@@ -16,7 +17,7 @@ def branches(has_cosmics, is_mc):
               "reco_beam_calo_endZ", "reco_beam_calo_endDirX", "reco_beam_calo_endDirY", "reco_beam_calo_endDirZ"]
 
     branch += ["reco_daughter_allShower_energy", "reco_daughter_allShower_dirX", "reco_daughter_allShower_dirY",
-                "reco_daughter_allShower_dirZ", "reco_daughter_PFP_emScore", "true_beam_startP", "true_beam_endP"]
+                "reco_daughter_allShower_dirZ", "reco_daughter_PFP_emScore"]
 
     branch += ["reco_daughter_allTrack_startX", "reco_daughter_allTrack_startY", "reco_daughter_allTrack_startZ"]
     branch += ["reco_daughter_allTrack_endX", "reco_daughter_allTrack_endY", "reco_daughter_allTrack_endZ"]
@@ -24,9 +25,8 @@ def branches(has_cosmics, is_mc):
                        "reco_daughter_allTrack_calibrated_dEdX_SCE"]
     branch += ["reco_daughter_allShower_dirX", "reco_daughter_allShower_dirY", "reco_daughter_allShower_dirZ",
                        "reco_daughter_PFP_nHits"]
-    branch += ["reco_daughter_allTrack_Chi2_proton", "reco_daughter_allTrack_Chi2_ndof",
-                       "reco_daughter_PFP_true_byHits_PDG"]
-    branch += ["reco_daughter_allTrack_Chi2_pion", "reco_daughter_allTrack_Chi2_ndof_pion"]
+    branch += ["reco_daughter_allTrack_Chi2_proton", "reco_daughter_allTrack_Chi2_ndof"]
+    branch += ["reco_daughter_allTrack_Chi2_pion", "reco_daughter_allTrack_Chi2_ndof_pion", "reco_daughter_PFP_true_byHits_PDG"]
 
     branch += ["reco_all_spacePts_X", "reco_all_spacePts_Y", "reco_all_spacePts_Z", "reco_all_spacePts_Integral"]
 
@@ -43,7 +43,7 @@ def branches(has_cosmics, is_mc):
                    "true_daughter_nPiMinus", "true_daughter_nProton", "true_daughter_nPiPlus",
                    "true_beam_daughter_PDG", "true_beam_endX_SCE", "true_beam_endY_SCE", "true_beam_endZ_SCE",
                    "true_beam_daughter_startP", "true_beam_daughter_startPx", "true_beam_daughter_startPy",
-                   "true_beam_daughter_startPz"]
+                   "true_beam_daughter_startPz", "true_beam_endP"]
 
         branch += ["true_beam_Pi0_decay_startP", "true_beam_Pi0_decay_startPx", "true_beam_Pi0_decay_startPy",
                    "true_beam_Pi0_decay_startPz"]
@@ -108,18 +108,26 @@ def save_results(thread_results, results_file, results_list=None):
     with open(results_file, 'wb') as f:
         pickle.dump(results_dict, f)
 
+    fit_vals = np.asarray(fit_list)
+    np.savetxt(results_file.rsplit(".")[0] + ".csv", fit_vals[:, :-3], delimiter=",", fmt="%.6f", comments="")
+
 
 if __name__ == '__main__':
 
     use_threading = False
 
-    in_file_path = sys.argv[1]
-    in_file_list = in_file_path + "/pduneana*.root"
+    config_file = sys.argv[1]
 
-    run_name = sys.argv[2]
+    in_file_path = sys.argv[2]
+    in_file_list = in_file_path + ":pduneana/beamana" #"/pduneana*.root"
+
+    run_name = sys.argv[3]
     results_file = run_name + '.pickle'
 
-    with open("config.json", 'r') as f:
+    print("Processing file: ", in_file_list)
+    print("Will write results to: ", results_file)
+
+    with open(config_file, 'r') as f:
         config = json.load(f)
 
     print(json.dumps(config))
@@ -140,6 +148,9 @@ if __name__ == '__main__':
     #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_16.root:pduneana/beamana",
     #             "/home/jon/work/protodune/analysis/pi0_reco/data/1gev_ana_files/subset/pduneana_17.root:pduneana/beamana"
     #             ]
+
+    #in_file_list = "/nfs/disk1/users/jon/custom_ntuples/data/run5431/pduneana_24.root:beamana"
+    #in_file_list = "/nfs/disk1/users/jon/custom_ntuples/mc/test_set/pduneana_168.root:beamana"
 
     is_mc = config["pi0_fitter"]["is_mc"]
 
