@@ -83,9 +83,12 @@ class CleanEvent:
         if len(spherical_pts[pts_fiducial_mask & radius_cut]) < 1: return None
 
         if self.has_cosmics:
-            cosmic_removed_mask = self.remove_cosmics_from_pfp(cartesian_pts=cartesian_pts[pts_fiducial_mask & radius_cut],
+            if len(cosmic_pts[cosmic_fiducial_mask]) > 0:
+                cosmic_removed_mask = self.remove_cosmics_from_pfp(cartesian_pts=cartesian_pts[pts_fiducial_mask & radius_cut],
                                                                cosmic_pts=cosmic_pts[cosmic_fiducial_mask])
-            spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut][cosmic_removed_mask]
+                spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut][cosmic_removed_mask]
+            else:
+                spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut]
             if self._cut_name == "cosmics_cut": self._cut_points = spherical_pts
         else:
             spherical_pts = spherical_pts[pts_fiducial_mask & radius_cut]
@@ -172,6 +175,9 @@ class CleanEvent:
         tree = KDTree(cosmic_pts)
         tmp_masked_pts = tree.query_radius(cosmic_pts, r=2.0)
         tmp_cosmic_remove_mask = (np.asarray([a.size > 3 for a in tmp_masked_pts]))
+
+        if len(cosmic_pts[tmp_cosmic_remove_mask]) < 1:
+            return np.ones(len(cartesian_pts)).astype(bool)
 
         # Now remove any event point within 2cm of a cosmic point
         tree = KDTree(cosmic_pts[tmp_cosmic_remove_mask])
